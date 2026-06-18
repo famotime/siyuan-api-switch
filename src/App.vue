@@ -92,7 +92,7 @@
                   <div class="form-group col-6">
                     <div class="label-with-link">
                       <label>AI 服务商 *</label>
-                      <a v-if="editingProfile.providerUrl" :href="editingProfile.providerUrl" target="_blank" class="provider-link-btn" data-tooltip="前往官网获取 API Key">
+                      <a v-if="editingProfile.providerUrl" href="javascript:void(0)" @click.prevent="openProviderUrl(editingProfile.providerUrl)" class="provider-link-btn" data-tooltip="前往官网获取 API Key">
                         <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" style="fill:none!important"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                       </a>
                     </div>
@@ -346,6 +346,12 @@ const getProviderName = (provider: string) => {
     custom: "Custom"
   }
   return dict[provider] || provider
+}
+
+const openProviderUrl = (url: string) => {
+  if (url) {
+    window.open(url, "_blank")
+  }
 }
 
 // 数据同步刷新
