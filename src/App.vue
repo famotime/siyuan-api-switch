@@ -5,11 +5,11 @@
         <!-- 顶栏 -->
         <div class="dialog-header">
           <div class="header-title">
-            <svg class="header-icon"><use xlink:href="#iconSettings"></use></svg>
+            <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
             <span>API 管家 (siyuan-api-manager)</span>
           </div>
-          <button class="close-btn" @click="closeDialog">
-            <svg><use xlink:href="#iconClose"></use></svg>
+          <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
@@ -20,8 +20,8 @@
             <div class="sidebar-section">
               <div class="section-title">
                 <span>API 配置轮廓 (Profiles)</span>
-                <button class="add-profile-btn" @click="createNewProfile" title="添加新配置">
-                  <svg><use xlink:href="#iconAdd"></use></svg>
+                <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
+                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </button>
               </div>
               <div class="profile-list">
@@ -31,8 +31,13 @@
                   :class="['profile-item', { active: selectedProfileId === prof.id }]"
                   @click="selectProfile(prof.id)"
                 >
-                  <div class="profile-item-name">{{ prof.name }}</div>
-                  <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
+                  <div class="profile-item-meta">
+                    <div class="profile-item-name">{{ prof.name }}</div>
+                    <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
+                  </div>
+                  <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                  </button>
                 </div>
                 <div v-if="profiles.length === 0" class="empty-list">
                   暂无 API 配置，点击上方 + 创建
@@ -51,13 +56,18 @@
                   :class="['plugin-item', { active: activePluginId === plug.pluginId }]"
                   @click="selectPlugin(plug.pluginId)"
                 >
-                  <div class="plugin-item-header">
-                    <span class="plugin-name">{{ plug.displayName }}</span>
-                    <span :class="['status-badge', plug.isBound ? 'bound' : 'unbound']">
-                      {{ plug.isBound ? '已接管' : '独立配置' }}
-                    </span>
+                  <div class="plugin-item-info">
+                    <div class="plugin-item-header">
+                      <span class="plugin-name">{{ plug.displayName }}</span>
+                      <span :class="['status-badge', plug.isBound ? 'bound' : 'unbound']">
+                        {{ plug.isBound ? '已接管' : '独立配置' }}
+                      </span>
+                    </div>
+                    <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
                   </div>
-                  <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
+                  <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
+                  </button>
                 </div>
                 <div v-if="registeredPlugins.length === 0" class="empty-list">
                   暂无活跃的兼容子插件
@@ -80,7 +90,12 @@
                     <input type="text" class="b3-text-field" v-model="editingProfile.name" placeholder="如 DeepSeek 默认" />
                   </div>
                   <div class="form-group col-6">
-                    <label>AI 服务商 *</label>
+                    <div class="label-with-link">
+                      <label>AI 服务商 *</label>
+                      <a v-if="editingProfile.providerUrl" :href="editingProfile.providerUrl" target="_blank" class="provider-link-btn" data-tooltip="前往官网获取 API Key">
+                        <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" style="fill:none!important"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                      </a>
+                    </div>
                     <select class="b3-select" v-model="editingProfile.provider" @change="onProviderChange">
                       <option value="deepseek">DeepSeek</option>
                       <option value="gemini">Google Gemini</option>
@@ -88,15 +103,6 @@
                       <option value="openai">OpenAI</option>
                       <option value="custom">Custom (自定义)</option>
                     </select>
-                  </div>
-                </div>
-
-                <div class="form-row" v-if="editingProfile.providerUrl">
-                  <div class="form-group col-12">
-                    <span class="info-link">
-                      💡 官网链接: 
-                      <a :href="editingProfile.providerUrl" target="_blank" class="link-btn">{{ editingProfile.providerUrl }}</a>
-                    </span>
                   </div>
                 </div>
 
@@ -114,8 +120,9 @@
                       v-model="editingProfile.apiKey" 
                       placeholder="sk-..." 
                     />
-                    <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button">
-                      <span>{{ showApiKey ? '隐藏' : '显示' }}</span>
+                    <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'">
+                      <svg v-if="showApiKey" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" style="fill:none!important"></path><circle cx="12" cy="12" r="3" style="fill:none!important"></circle></svg>
+                      <svg v-else viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" style="fill:none!important"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                     </button>
                   </div>
                 </div>
@@ -134,24 +141,32 @@
                   </div>
                 </div>
 
-                <div class="form-row">
-                  <div class="form-group col-4">
-                    <label>超时时间 (秒)</label>
-                    <input type="number" class="b3-text-field" v-model.number="editingProfile.requestTimeoutSeconds" min="1" max="600" />
-                  </div>
-                  <div class="form-group col-4">
-                    <label>采样温度 (Temperature)</label>
-                    <input type="number" class="b3-text-field" v-model.number="editingProfile.temperature" step="0.1" min="0" max="2" />
-                  </div>
-                  <div class="form-group col-4">
-                    <label>单次 Max Tokens</label>
-                    <input type="number" class="b3-text-field" v-model.number="editingProfile.maxTokens" min="1" />
-                  </div>
+                <!-- 折叠的高级设置面板 -->
+                <div class="advanced-divider" @click="showAdvanced = !showAdvanced">
+                  <span>高级参数设置</span>
+                  <svg :class="['arrow-icon', { expanded: showAdvanced }]" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </div>
 
-                <div class="form-group">
-                  <label>备注说明 (可选)</label>
-                  <textarea class="b3-text-field textarea-field" v-model="editingProfile.memo" placeholder="添加此 API 账号的备注信息，如过期时间或用途说明..."></textarea>
+                <div class="advanced-fields" v-show="showAdvanced">
+                  <div class="form-row">
+                    <div class="form-group col-4">
+                      <label>超时时间 (秒)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.requestTimeoutSeconds" min="1" max="600" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>采样温度 (Temperature)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.temperature" step="0.1" min="0" max="2" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>单次 Max Tokens</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxTokens" min="1" />
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label>备注说明 (可选)</label>
+                    <textarea class="b3-text-field textarea-field" v-model="editingProfile.memo" placeholder="添加此 API 账号的备注信息，如过期时间或用途说明..."></textarea>
+                  </div>
                 </div>
               </div>
 
@@ -221,7 +236,7 @@
 
             <!-- 场景三：空白状态 -->
             <div v-else class="empty-content">
-              <svg class="welcome-icon"><use xlink:href="#iconSettings"></use></svg>
+              <svg class="welcome-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
               <h2>欢迎使用 API 管家</h2>
               <p>左侧点击「+」可以创建多套不同的 AI 供应商配置。选择接管子插件，实现一键共享、无缝切换模型与供应商。</p>
             </div>
@@ -236,10 +251,12 @@
 import { usePlugin } from '@/main'
 import { onMounted, ref, watch } from 'vue'
 import { apiManagerCore, ApiProfile, RegisteredPluginInfo } from "@/services/api-manager-core"
+import { confirm, showMessage } from "siyuan"
 
 // 状态定义
 const showDialog = ref(false)
 const showApiKey = ref(false)
+const showAdvanced = ref(false)
 const activeView = ref<'empty' | 'profile' | 'plugin'>('empty')
 const selectedProfileId = ref<string | null>(null)
 const activePluginId = ref<string | null>(null)
@@ -250,6 +267,31 @@ const registeredPlugins = ref<RegisteredPluginInfo[]>([])
 const activePlugin = ref<RegisteredPluginInfo | null>(null)
 const editingProfile = ref<ApiProfile | null>(null)
 const isNewProfile = ref(false)
+
+// 记录原始快照用于脏检查
+const originalProfileState = ref<string>("")
+
+const recordProfileSnapshot = (profile: ApiProfile | null) => {
+  originalProfileState.value = profile ? JSON.stringify(profile) : ""
+}
+
+const isProfileDirty = () => {
+  if (activeView.value !== 'profile' || !editingProfile.value) return false
+  return originalProfileState.value !== JSON.stringify(editingProfile.value)
+}
+
+// 脏检查保护拦截
+const handleSafeNavigate = (navigateFn: () => void) => {
+  if (isProfileDirty()) {
+    confirm("未保存的更改", "当前配置已被修改，是否放弃更改并离开？", () => {
+      // 放弃修改，重置快照并离开
+      originalProfileState.value = ""
+      navigateFn()
+    })
+  } else {
+    navigateFn()
+  }
+}
 
 // 提供商内置模板默认值
 const providerDefaults: Record<string, { baseUrl: string; model: string; providerUrl: string }> = {
@@ -317,10 +359,11 @@ const refreshData = () => {
 }
 
 const importLocalConfig = async (pluginId: string) => {
-  if (confirm("确定要将此插件的本地配置导入为全局 API Profile 并由 API 管家接管吗？")) {
+  confirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 管家接管吗？", async () => {
     await apiManagerCore.importLocalConfigToProfile(pluginId)
     refreshData()
-  }
+    showMessage("已成功导入并接管该插件", 3000, "info")
+  })
 }
 
 onMounted(() => {
@@ -346,49 +389,64 @@ plugin.addTopBar({
 
 // 交互操作
 const closeDialog = () => {
-  showDialog.value = false
+  handleSafeNavigate(() => {
+    showDialog.value = false
+  })
 }
 
 const selectProfile = (id: string) => {
-  activePluginId.value = null
-  selectedProfileId.value = id
-  isNewProfile.value = false
-  activeView.value = 'profile'
-  showApiKey.value = false
+  const doSelect = () => {
+    activePluginId.value = null
+    selectedProfileId.value = id
+    isNewProfile.value = false
+    activeView.value = 'profile'
+    showApiKey.value = false
+    showAdvanced.value = false // 切换Profile时收起高级
 
-  const profile = profiles.value.find(p => p.id === id)
-  if (profile) {
-    editingProfile.value = { ...profile }
+    const profile = profiles.value.find(p => p.id === id)
+    if (profile) {
+      editingProfile.value = { ...profile }
+      recordProfileSnapshot(editingProfile.value)
+    }
   }
+  handleSafeNavigate(doSelect)
 }
 
 const selectPlugin = (pluginId: string) => {
-  selectedProfileId.value = null
-  activePluginId.value = pluginId
-  activeView.value = 'plugin'
-  activePlugin.value = registeredPlugins.value.find(p => p.pluginId === pluginId) || null
+  const doSelect = () => {
+    selectedProfileId.value = null
+    activePluginId.value = pluginId
+    activeView.value = 'plugin'
+    activePlugin.value = registeredPlugins.value.find(p => p.pluginId === pluginId) || null
+  }
+  handleSafeNavigate(doSelect)
 }
 
 const createNewProfile = () => {
-  activePluginId.value = null
-  selectedProfileId.value = null
-  isNewProfile.value = true
-  activeView.value = 'profile'
-  showApiKey.value = false
+  const doCreate = () => {
+    activePluginId.value = null
+    selectedProfileId.value = null
+    isNewProfile.value = true
+    activeView.value = 'profile'
+    showApiKey.value = false
+    showAdvanced.value = false // 新建时默认收起高级
 
-  editingProfile.value = {
-    id: "",
-    name: "新配置",
-    provider: "deepseek",
-    baseUrl: providerDefaults.deepseek.baseUrl,
-    apiKey: "",
-    model: providerDefaults.deepseek.model,
-    requestTimeoutSeconds: 60,
-    temperature: 0.7,
-    maxTokens: 4096,
-    memo: "",
-    providerUrl: providerDefaults.deepseek.providerUrl
+    editingProfile.value = {
+      id: "",
+      name: "新配置",
+      provider: "deepseek",
+      baseUrl: providerDefaults.deepseek.baseUrl,
+      apiKey: "",
+      model: providerDefaults.deepseek.model,
+      requestTimeoutSeconds: 60,
+      temperature: 0.7,
+      maxTokens: 4096,
+      memo: "",
+      providerUrl: providerDefaults.deepseek.providerUrl
+    }
+    recordProfileSnapshot(editingProfile.value)
   }
+  handleSafeNavigate(doCreate)
 }
 
 const onProviderChange = () => {
@@ -410,16 +468,18 @@ const selectPresetModel = (e: Event) => {
 }
 
 const cancelEdit = () => {
-  editingProfile.value = null
-  activeView.value = 'empty'
-  selectedProfileId.value = null
+  handleSafeNavigate(() => {
+    editingProfile.value = null
+    activeView.value = 'empty'
+    selectedProfileId.value = null
+  })
 }
 
 const saveProfile = async () => {
   if (!editingProfile.value) return
   const ep = editingProfile.value
   if (!ep.name.trim() || !ep.baseUrl.trim() || !ep.apiKey.trim() || !ep.model.trim()) {
-    alert("请填写所有必填字段 (*)")
+    showMessage("请填写所有必填字段 (*)", 5000, "error")
     return
   }
 
@@ -431,18 +491,57 @@ const saveProfile = async () => {
     await apiManagerCore.updateProfile(ep)
   }
   
+  showMessage("保存成功", 3000, "info")
+  
   refreshData()
+  
+  // 更新快照，防止跳转拦截
+  const savedProfile = profiles.value.find(p => p.id === selectedProfileId.value)
+  if (savedProfile) {
+    editingProfile.value = { ...savedProfile }
+    recordProfileSnapshot(editingProfile.value)
+  } else {
+    recordProfileSnapshot(ep)
+  }
+  
+  // 保持当前 profile 的选中状态
   selectProfile(selectedProfileId.value!)
 }
 
 const deleteProfile = async (id: string) => {
-  if (confirm("确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。")) {
+  confirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
+    originalProfileState.value = "" // 阻止脏检查
     await apiManagerCore.deleteProfile(id)
     editingProfile.value = null
     activeView.value = 'empty'
     selectedProfileId.value = null
     refreshData()
-  }
+    showMessage("配置已成功删除", 3000, "info")
+  })
+}
+
+// 侧边栏 Hover 快捷删除
+const quickDeleteProfile = (prof: ApiProfile) => {
+  confirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
+    if (editingProfile.value && editingProfile.value.id === prof.id) {
+      originalProfileState.value = "" // 阻止脏检查
+      editingProfile.value = null
+      activeView.value = 'empty'
+      selectedProfileId.value = null
+    }
+    await apiManagerCore.deleteProfile(prof.id)
+    refreshData()
+    showMessage(`配置「${prof.name}」已成功删除`, 3000, "info")
+  })
+}
+
+// 侧边栏 Hover 快捷解除接管
+const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
+  confirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
+    await apiManagerCore.bindPlugin(plug.pluginId, "")
+    refreshData()
+    showMessage(`已解除对「${plug.displayName}」的接管`, 3000, "info")
+  })
 }
 
 const onBindingChange = async (e: Event) => {
@@ -596,12 +695,46 @@ const onBindingChange = async (e: Event) => {
   padding: 8px 16px;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
   border-left: 3px solid transparent;
+  transition: background-color 0.2s ease, border-left-color 0.2s ease;
+
+  .profile-item-meta, .plugin-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .profile-quick-delete, .plugin-quick-unbind {
+    opacity: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    color: var(--b3-theme-on-surface-mute, #888);
+    transition: opacity 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+
+    &:hover {
+      background-color: var(--b3-theme-background-hover);
+      color: var(--b3-theme-error, #f44336);
+    }
+  }
 
   &:hover {
     background-color: var(--b3-theme-background-hover);
+    
+    .profile-quick-delete, .plugin-quick-unbind {
+      opacity: 1;
+    }
   }
 
   &.active {
@@ -638,13 +771,13 @@ const onBindingChange = async (e: Event) => {
     font-weight: bold;
 
     &.bound {
-      background-color: rgba(76, 175, 80, 0.15);
-      color: #4caf50;
+      background-color: rgba(76, 175, 80, 0.12);
+      color: var(--b3-theme-success, #4caf50);
     }
 
     &.unbound {
-      background-color: rgba(158, 158, 158, 0.15);
-      color: #9e9e9e;
+      background-color: rgba(158, 158, 158, 0.12);
+      color: var(--b3-theme-on-surface-mute, #9e9e9e);
     }
   }
 }
@@ -789,13 +922,31 @@ const onBindingChange = async (e: Event) => {
   }
 }
 
+.label-with-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .provider-link-btn {
+    display: inline-flex;
+    align-items: center;
+    color: var(--b3-theme-primary);
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
 .input-password-wrapper {
   position: relative;
   display: flex;
   align-items: center;
 
   .b3-text-field {
-    padding-right: 60px;
+    padding-right: 40px;
   }
 
   .toggle-password-btn {
@@ -803,31 +954,18 @@ const onBindingChange = async (e: Event) => {
     right: 8px;
     background: none;
     border: none;
-    color: var(--b3-theme-primary);
+    color: var(--b3-theme-on-surface-mute, #888);
     cursor: pointer;
-    font-size: 11px;
-    font-weight: bold;
     padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: color 0.2s ease, background-color 0.2s ease;
 
     &:hover {
-      text-decoration: underline;
-    }
-  }
-}
-
-.info-link {
-  font-size: 12px;
-  color: var(--b3-theme-on-surface-mute, #888);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-
-  .link-btn {
-    color: var(--b3-theme-primary);
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
+      background-color: var(--b3-theme-background-hover);
+      color: var(--b3-theme-primary);
     }
   }
 }
@@ -872,7 +1010,7 @@ const onBindingChange = async (e: Event) => {
     background-color: rgba(76, 175, 80, 0.08);
     border-color: rgba(76, 175, 80, 0.2);
     .status-title strong {
-      color: #4caf50;
+      color: var(--b3-theme-success, #4caf50);
     }
   }
 
@@ -880,7 +1018,7 @@ const onBindingChange = async (e: Event) => {
     background-color: rgba(158, 158, 158, 0.08);
     border-color: rgba(158, 158, 158, 0.2);
     .status-title strong {
-      color: #9e9e9e;
+      color: var(--b3-theme-on-surface-mute, #9e9e9e);
     }
   }
 }
@@ -974,6 +1112,86 @@ const onBindingChange = async (e: Event) => {
   to {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+/* CSS Tooltip 机制 */
+[data-tooltip] {
+  position: relative;
+  
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    background-color: var(--b3-theme-on-background, #2c3e50);
+    color: var(--b3-theme-background, #ffffff);
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: normal;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2050;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  &:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* 折叠高级设置样式 */
+.advanced-divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--b3-theme-on-surface-mute, #888);
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--b3-border-color);
+  user-select: none;
+  margin: 12px 0 4px 0;
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--b3-theme-primary);
+  }
+
+  .arrow-icon {
+    width: 14px;
+    height: 14px;
+    transition: transform 0.2s ease;
+    
+    &.expanded {
+      transform: rotate(180deg);
+    }
+  }
+}
+
+.advanced-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+  animation: slideDown 0.2s ease-out forwards;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>
