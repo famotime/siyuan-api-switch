@@ -242,6 +242,18 @@
             </div>
           </div>
         </div>
+
+        <!-- 自定义精美确认弹窗 -->
+        <div class="confirm-overlay" v-if="confirmDialog.show">
+          <div class="confirm-dialog animate-fade-in">
+            <div class="confirm-title">{{ confirmDialog.title }}</div>
+            <div class="confirm-text">{{ confirmDialog.text }}</div>
+            <div class="confirm-actions">
+              <button class="b3-button b3-button--cancel" @click="closeConfirm(false)">取消</button>
+              <button class="b3-button b3-button--primary" @click="closeConfirm(true)">确定</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -251,7 +263,7 @@
 import { usePlugin } from '@/main'
 import { onMounted, ref, watch } from 'vue'
 import { apiManagerCore, ApiProfile, RegisteredPluginInfo } from "@/services/api-manager-core"
-import { confirm, showMessage } from "siyuan"
+import { showMessage } from "siyuan"
 
 // 状态定义
 const showDialog = ref(false)
@@ -280,10 +292,44 @@ const isProfileDirty = () => {
   return originalProfileState.value !== JSON.stringify(editingProfile.value)
 }
 
+// 自定义确认弹窗状态与方法
+interface ConfirmState {
+  show: boolean
+  title: string
+  text: string
+  onConfirm?: () => void
+  onCancel?: () => void
+}
+
+const confirmDialog = ref<ConfirmState>({
+  show: false,
+  title: "",
+  text: ""
+})
+
+const showCustomConfirm = (title: string, text: string, onConfirm: () => void, onCancel?: () => void) => {
+  confirmDialog.value = {
+    show: true,
+    title,
+    text,
+    onConfirm,
+    onCancel
+  }
+}
+
+const closeConfirm = (result: boolean) => {
+  confirmDialog.value.show = false
+  if (result) {
+    if (confirmDialog.value.onConfirm) confirmDialog.value.onConfirm()
+  } else {
+    if (confirmDialog.value.onCancel) confirmDialog.value.onCancel()
+  }
+}
+
 // 脏检查保护拦截
 const handleSafeNavigate = (navigateFn: () => void) => {
   if (isProfileDirty()) {
-    confirm("未保存的更改", "当前配置已被修改，是否放弃更改并离开？", () => {
+    showCustomConfirm("未保存的更改", "当前配置已被修改，是否放弃更改并离开？", () => {
       // 放弃修改，重置快照并离开
       originalProfileState.value = ""
       navigateFn()
@@ -365,7 +411,7 @@ const refreshData = () => {
 }
 
 const importLocalConfig = async (pluginId: string) => {
-  confirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 管家接管吗？", async () => {
+  showCustomConfirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 管家接管吗？", async () => {
     await apiManagerCore.importLocalConfigToProfile(pluginId)
     refreshData()
     showMessage("已成功导入并接管该插件", 3000, "info")
@@ -515,7 +561,7 @@ const saveProfile = async () => {
 }
 
 const deleteProfile = async (id: string) => {
-  confirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
+  showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
     originalProfileState.value = "" // 阻止脏检查
     await apiManagerCore.deleteProfile(id)
     editingProfile.value = null
@@ -528,7 +574,7 @@ const deleteProfile = async (id: string) => {
 
 // 侧边栏 Hover 快捷删除
 const quickDeleteProfile = (prof: ApiProfile) => {
-  confirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
+  showCustomConfirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
     if (editingProfile.value && editingProfile.value.id === prof.id) {
       originalProfileState.value = "" // 阻止脏检查
       editingProfile.value = null
@@ -543,7 +589,7 @@ const quickDeleteProfile = (prof: ApiProfile) => {
 
 // 侧边栏 Hover 快捷解除接管
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
-  confirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
+  showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
     await apiManagerCore.bindPlugin(plug.pluginId, "")
     refreshData()
     showMessage(`已解除对「${plug.displayName}」的接管`, 3000, "info")
@@ -1198,6 +1244,52 @@ const onBindingChange = async (e: Event) => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* 自定义确认弹窗样式 */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 2100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.confirm-dialog {
+  width: 360px;
+  background-color: var(--b3-theme-background);
+  color: var(--b3-theme-on-background);
+  border-radius: 12px;
+  border: 1px solid var(--b3-border-color);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  
+  .confirm-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--b3-theme-on-background);
+  }
+  
+  .confirm-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--b3-theme-on-surface-mute, #888);
+  }
+  
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
   }
 }
 </style>
