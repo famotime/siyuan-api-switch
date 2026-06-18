@@ -19,7 +19,10 @@
           <div class="dialog-sidebar">
             <div class="sidebar-section">
               <div class="section-title">
-                <span>API 配置轮廓 (Profiles)</span>
+                <div class="title-text">
+                  <span class="title-indicator"></span>
+                  <span>API 配置轮廓 (Profiles)</span>
+                </div>
                 <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
                   <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </button>
@@ -47,7 +50,10 @@
 
             <div class="sidebar-section">
               <div class="section-title">
-                <span>子插件接管 (Bindings)</span>
+                <div class="title-text">
+                  <span class="title-indicator"></span>
+                  <span>子插件接管 (Bindings)</span>
+                </div>
               </div>
               <div class="plugin-list">
                 <div 
@@ -696,25 +702,45 @@ const onBindingChange = async (e: Event) => {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  padding: 12px 0;
-  gap: 16px;
+  padding: 16px 0;
+  gap: 20px;
 }
 
 .sidebar-section {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding-bottom: 20px;
+  
+  &:not(:last-child) {
+    border-bottom: 1.5px solid var(--b3-border-color);
+    margin-bottom: 4px;
+  }
 
   .section-title {
-    font-size: 11px;
-    font-weight: bold;
-    color: var(--b3-theme-on-surface-mute, #888);
-    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
     padding: 0 16px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    letter-spacing: 0.5px;
+    
+    .title-text {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .title-indicator {
+      width: 3px;
+      height: 12px;
+      background-color: var(--b3-theme-primary);
+      border-radius: 2px;
+      display: inline-block;
+    }
 
     .add-profile-btn {
       background: none;
