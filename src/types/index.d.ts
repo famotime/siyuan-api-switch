@@ -125,7 +125,7 @@ interface Window {
   _sy_plugin_sample: {
     [key: string]: any;
   };
-  siyuanApiManager?: SiyuanApiManager;
+  siyuanApiSwitch?: SiyuanApiSwitch;
 }
 
 export interface SharedConfig {
@@ -142,7 +142,7 @@ export interface SharedConfig {
   providerUrl?: string;   // 服务商官网链接
 }
 
-export interface SiyuanApiManager {
+export interface SiyuanApiSwitch {
   version: string;
   register(
     pluginId: string,

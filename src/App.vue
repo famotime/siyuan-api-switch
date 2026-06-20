@@ -1,12 +1,12 @@
 <template>
   <div class="plugin-app-main" v-if="showDialog">
     <div class="dialog-overlay" @click.self="closeDialog">
-      <div class="manager-dialog animate-fade-in">
+      <div class="switch-dialog animate-fade-in">
         <!-- 顶栏 -->
         <div class="dialog-header">
           <div class="header-title">
             <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
-            <span>API 管家 (siyuan-api-manager)</span>
+            <span>API 旋钮 (siyuan-api-switch)</span>
           </div>
           <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -198,7 +198,7 @@
                   </div>
                   <div class="status-desc">
                     {{ activePlugin.isBound 
-                      ? '当前子插件的通用 AI API 配置由 API 管家接管。子插件原配置面板的相应字段已置灰只读。' 
+                      ? '当前子插件的通用 AI API 配置由 API 旋钮接管。子插件原配置面板的相应字段已置灰只读。' 
                       : '当前子插件独立运行，使用其自身的配置面板所保存的 API 配置。' }}
                   </div>
                 </div>
@@ -235,7 +235,7 @@
                     <li>请求超时时间 (Timeout)</li>
                     <li>Temperature 采样温度与 Max Tokens 限制</li>
                   </ul>
-                  <p class="warning-text">⚠️ 提示：绑定完成后，该子插件的 AI 请求将实时重定向至管家配置，无需手动重启插件。</p>
+                  <p class="warning-text">⚠️ 提示：绑定完成后，该子插件的 AI 请求将实时重定向至旋钮配置，无需手动重启插件。</p>
                 </div>
               </div>
             </div>
@@ -243,7 +243,7 @@
             <!-- 场景三：空白状态 -->
             <div v-else class="empty-content">
               <svg class="welcome-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
-              <h2>欢迎使用 API 管家</h2>
+              <h2>欢迎使用 API 旋钮</h2>
               <p>左侧点击「+」可以创建多套不同的 AI 供应商配置。选择接管子插件，实现一键共享、无缝切换模型与供应商。</p>
             </div>
           </div>
@@ -268,7 +268,7 @@
 <script setup lang="ts">
 import { usePlugin } from '@/main'
 import { onMounted, ref, watch } from 'vue'
-import { apiManagerCore, ApiProfile, RegisteredPluginInfo } from "@/services/api-manager-core"
+import { apiSwitchCore, ApiProfile, RegisteredPluginInfo } from "@/services/api-switch-core"
 import { showMessage } from "siyuan"
 
 // 状态定义
@@ -408,8 +408,8 @@ const openProviderUrl = (url: string) => {
 
 // 数据同步刷新
 const refreshData = () => {
-  profiles.value = [...apiManagerCore.getProfiles()]
-  registeredPlugins.value = [...apiManagerCore.getRegisteredPlugins()]
+  profiles.value = [...apiSwitchCore.getProfiles()]
+  registeredPlugins.value = [...apiSwitchCore.getRegisteredPlugins()]
   
   if (activePluginId.value) {
     activePlugin.value = registeredPlugins.value.find(p => p.pluginId === activePluginId.value) || null
@@ -417,15 +417,15 @@ const refreshData = () => {
 }
 
 const importLocalConfig = async (pluginId: string) => {
-  showCustomConfirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 管家接管吗？", async () => {
-    await apiManagerCore.importLocalConfigToProfile(pluginId)
+  showCustomConfirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 旋钮接管吗？", async () => {
+    await apiSwitchCore.importLocalConfigToProfile(pluginId)
     refreshData()
     showMessage("已成功导入并接管该插件", 3000, "info")
   })
 }
 
 onMounted(() => {
-  apiManagerCore.onStateChange = refreshData
+  apiSwitchCore.onStateChange = refreshData
   refreshData()
   
   // 注册全局打开设置的方法
@@ -439,7 +439,7 @@ onMounted(() => {
 const plugin = usePlugin()
 plugin.addTopBar({
   icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 13h5m3 3V8h3a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-3m8-5v8M9 16v-5.5a2.5 2.5 0 0 0-5 0V16" style="fill:none!important"></path></svg>`,
-  title: 'API 管家',
+  title: 'API 旋钮',
   callback: () => {
     showDialog.value = true
   },
@@ -543,11 +543,11 @@ const saveProfile = async () => {
   }
 
   if (isNewProfile.value) {
-    const newProf = await apiManagerCore.addProfile(ep)
+    const newProf = await apiSwitchCore.addProfile(ep)
     selectedProfileId.value = newProf.id
     isNewProfile.value = false
   } else {
-    await apiManagerCore.updateProfile(ep)
+    await apiSwitchCore.updateProfile(ep)
   }
   
   showMessage("保存成功", 3000, "info")
@@ -570,7 +570,7 @@ const saveProfile = async () => {
 const deleteProfile = async (id: string) => {
   showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
     originalProfileState.value = "" // 阻止脏检查
-    await apiManagerCore.deleteProfile(id)
+    await apiSwitchCore.deleteProfile(id)
     editingProfile.value = null
     activeView.value = 'empty'
     selectedProfileId.value = null
@@ -588,7 +588,7 @@ const quickDeleteProfile = (prof: ApiProfile) => {
       activeView.value = 'empty'
       selectedProfileId.value = null
     }
-    await apiManagerCore.deleteProfile(prof.id)
+    await apiSwitchCore.deleteProfile(prof.id)
     refreshData()
     showMessage(`配置「${prof.name}」已成功删除`, 3000, "info")
   })
@@ -597,7 +597,7 @@ const quickDeleteProfile = (prof: ApiProfile) => {
 // 侧边栏 Hover 快捷解除接管
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
-    await apiManagerCore.bindPlugin(plug.pluginId, "")
+    await apiSwitchCore.bindPlugin(plug.pluginId, "")
     refreshData()
     showMessage(`已解除对「${plug.displayName}」的接管`, 3000, "info")
   })
@@ -606,7 +606,7 @@ const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
 const onBindingChange = async (e: Event) => {
   if (!activePlugin.value) return
   const val = (e.target as HTMLSelectElement).value
-  await apiManagerCore.bindPlugin(activePlugin.value.pluginId, val)
+  await apiSwitchCore.bindPlugin(activePlugin.value.pluginId, val)
   refreshData()
 }
 </script>
@@ -631,7 +631,7 @@ const onBindingChange = async (e: Event) => {
   align-items: center;
 }
 
-.manager-dialog {
+.switch-dialog {
   width: 960px;
   height: 640px;
   background-color: var(--b3-theme-background);

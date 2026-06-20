@@ -1,5 +1,5 @@
 import { Plugin } from "siyuan";
-import { SharedConfig, SiyuanApiManager } from "@/types";
+import { SharedConfig, SiyuanApiSwitch } from "@/types";
 
 export interface ApiProfile {
   id: string;
@@ -15,7 +15,7 @@ export interface ApiProfile {
   providerUrl?: string;
 }
 
-export interface ApiManagerStorage {
+export interface ApiSwitchStorage {
   profiles: ApiProfile[];
   bindings: Record<string, string>; // pluginId -> profileId
 }
@@ -30,7 +30,7 @@ export interface RegisteredPluginInfo {
 
 const STORAGE_KEY = "config.json";
 
-class ApiManagerCore {
+class ApiSwitchCore {
   private plugin: Plugin | null = null;
   private profiles: ApiProfile[] = [];
   private bindings: Record<string, string> = {}; // pluginId -> profileId
@@ -66,7 +66,7 @@ class ApiManagerCore {
         this.bindings = {};
       }
     } catch (err) {
-      console.error("[API Manager] Failed to load config data", err);
+      console.error("[API Switch] Failed to load config data", err);
       this.profiles = [];
       this.bindings = {};
     }
@@ -75,7 +75,7 @@ class ApiManagerCore {
   async save() {
     if (!this.plugin) return;
     try {
-      const data: ApiManagerStorage = {
+      const data: ApiSwitchStorage = {
         profiles: this.profiles,
         bindings: this.bindings,
       };
@@ -84,12 +84,12 @@ class ApiManagerCore {
         this.onStateChange();
       }
     } catch (err) {
-      console.error("[API Manager] Failed to save config data", err);
+      console.error("[API Switch] Failed to save config data", err);
     }
   }
 
   private mountGlobal() {
-    const manager: SiyuanApiManager = {
+    const manager: SiyuanApiSwitch = {
       version: this.plugin?.version || "0.0.1",
       register: (pluginId, displayName, callback, localConfig) => {
         this.registerPlugin(pluginId, displayName, callback, localConfig);
@@ -102,11 +102,11 @@ class ApiManagerCore {
       },
     };
 
-    window.siyuanApiManager = manager;
-    console.log("[API Manager] Mounted global window.siyuanApiManager");
+    window.siyuanApiSwitch = manager;
+    console.log("[API Switch] Mounted global window.siyuanApiSwitch");
 
     // 触发就绪事件给先加载的子插件
-    const event = new CustomEvent("siyuan-api-manager:ready", {
+    const event = new CustomEvent("siyuan-api-switch:ready", {
       detail: manager,
     });
     window.dispatchEvent(event);
@@ -114,15 +114,15 @@ class ApiManagerCore {
 
   destroy() {
     // 卸载全局对象并通知所有注册的插件解除接管
-    if (window.siyuanApiManager) {
-      delete window.siyuanApiManager;
+    if (window.siyuanApiSwitch) {
+      delete window.siyuanApiSwitch;
     }
     
     for (const [pluginId, reg] of this.registrations.entries()) {
       try {
         reg.callback(null);
       } catch (err) {
-        console.error(`[API Manager] Error in callback during destroy for ${pluginId}`, err);
+        console.error(`[API Switch] Error in callback during destroy for ${pluginId}`, err);
       }
     }
     
@@ -137,14 +137,14 @@ class ApiManagerCore {
     localConfig?: Omit<SharedConfig, "profileId" | "profileName">
   ) {
     this.registrations.set(pluginId, { displayName, callback, localConfig });
-    console.log(`[API Manager] Plugin registered: ${displayName} (${pluginId})`, localConfig ? "with local config" : "without local config");
+    console.log(`[API Switch] Plugin registered: ${displayName} (${pluginId})`, localConfig ? "with local config" : "without local config");
 
     // 注册时立即将当前绑定的配置通知过去
     const boundConfig = this.getBoundSharedConfig(pluginId);
     try {
       callback(boundConfig);
     } catch (err) {
-      console.error(`[API Manager] Error during initial register callback for ${pluginId}`, err);
+      console.error(`[API Switch] Error during initial register callback for ${pluginId}`, err);
     }
 
     if (this.onStateChange) {
@@ -154,7 +154,7 @@ class ApiManagerCore {
 
   private unregisterPlugin(pluginId: string) {
     this.registrations.delete(pluginId);
-    console.log(`[API Manager] Plugin unregistered: ${pluginId}`);
+    console.log(`[API Switch] Plugin unregistered: ${pluginId}`);
     if (this.onStateChange) {
       this.onStateChange();
     }
@@ -247,9 +247,9 @@ class ApiManagerCore {
     if (reg) {
       try {
         reg.callback(config);
-        console.log(`[API Manager] Notified plugin ${pluginId} with config update`);
+        console.log(`[API Switch] Notified plugin ${pluginId} with config update`);
       } catch (err) {
-        console.error(`[API Manager] Failed to notify plugin ${pluginId}`, err);
+        console.error(`[API Switch] Failed to notify plugin ${pluginId}`, err);
       }
     }
   }
@@ -294,8 +294,8 @@ class ApiManagerCore {
     });
 
     await this.bindPlugin(pluginId, newProfile.id);
-    console.log(`[API Manager] Imported local config from ${pluginId} to new profile: ${profileName}`);
+    console.log(`[API Switch] Imported local config from ${pluginId} to new profile: ${profileName}`);
   }
 }
 
-export const apiManagerCore = new ApiManagerCore();
+export const apiSwitchCore = new ApiSwitchCore();

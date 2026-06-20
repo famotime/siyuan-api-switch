@@ -1,13 +1,13 @@
-# 思源笔记 API 管家 (siyuan-api-manager)
+# 思源笔记 API 旋钮 (siyuan-api-switch)
 
-思源笔记 API 管家是一款旨在帮助用户集中化管理、切换和共享 AI 服务 API 配置的插件。
+思源笔记 API 旋钮是一款旨在帮助用户集中化管理、切换和共享 AI 服务 API 配置的插件。
 
 ---
 
-## 💡 为什么需要 API 管家？
+## 💡 为什么需要 API 旋钮？
 思源笔记生态中有大量优秀的 AI 辅助插件（如文献总结、知识图谱分析、Muse 写作助手等）。但每个插件都需要单独配置 AI 的 API 地址、API Key、模型名称等通用参数。
 - **痛点**：当您需要更换 API Key 或切换 AI 提供商（如从 DeepSeek 切换到 SiliconFlow）时，必须进入每个插件逐个修改，十分繁琐。
-- **解决方式**：**API 管家** 提供统一的 Profile 管理。您只需配置一次，就可以将指定的 Profile 绑定接管到其他插件，实现一键共享与无缝切换。
+- **解决方式**：**API 旋钮** 提供统一的 Profile 管理。您只需配置一次，就可以将指定的 Profile 绑定接管到其他插件，实现一键共享与无缝切换。
 
 ---
 
@@ -25,16 +25,16 @@
 
 3. **零输入一键导入**
    - 当检测到已注册的插件拥有本地独立 API 配置时，绑定面板会显示「一键导入为 Profile 并接管」的选项。
-   - 一键自动将本地配置迁移为管家全局 Profile 并实现绑定，免除手动复制粘贴秘钥的烦恼。
+   - 一键自动将本地配置迁移为旋钮全局 Profile 并实现绑定，免除手动复制粘贴秘钥的烦恼。
 
 4. **优雅的降级保护**
-   - 采用全局解耦设计。若未安装 API 管家插件，子插件将完全无感地继续使用其自身独立的本地配置面板，没有任何副作用。
+   - 采用全局解耦设计。若未安装 API 旋钮插件，子插件将完全无感地继续使用其自身独立的本地配置面板，没有任何副作用。
 
 ---
 
 ## 🛠️ 第三方插件接入协议 (开发者指南)
 
-作为思源笔记插件开发者，您只需在子插件中加入约 20 行极简的同步逻辑，即可加入 API 管家的生态中。
+作为思源笔记插件开发者，您只需在子插件中加入约 20 行极简的同步逻辑，即可加入 API 旋钮的生态中。
 
 ### 1. 初始化时主动注册并监听
 在子插件的 `onload` 方法中加入以下注册逻辑，并在回调中接收 API 配置的覆盖和还原：
@@ -43,10 +43,10 @@
 // 保存内存接管变量
 private managedAiConfig: any | null = null;
 
-private initApiManagerSync() {
+private initApiSwitchSync() {
   const sync = (shared: any | null) => {
     if (shared) {
-      // 1. 进入接管状态：将管家下发的 SharedConfig 保存并覆盖本地 API 调用
+      // 1. 进入接管状态：将开关/旋钮下发的 SharedConfig 保存并覆盖本地 API 调用
       this.managedAiConfig = {
         baseUrl: shared.baseUrl,
         apiKey: shared.apiKey,
@@ -69,7 +69,7 @@ private initApiManagerSync() {
     }
   };
 
-  // 4. 提取当前插件已有的本地配置，供管家做一键导入迁移
+  // 4. 提取当前插件已有的本地配置，供开关/旋钮做一键导入迁移
   const localConfig = {
     provider: "custom", // 您的服务商标识
     baseUrl: this.config.baseUrl,
@@ -80,13 +80,13 @@ private initApiManagerSync() {
     maxTokens: this.config.maxTokens,
   };
 
-  if (window.siyuanApiManager) {
-    window.siyuanApiManager.register(this.name, this.displayName, sync, localConfig);
+  if (window.siyuanApiSwitch) {
+    window.siyuanApiSwitch.register(this.name, this.displayName, sync, localConfig);
   } else {
-    // 兼容思源插件并行加载时，管家加载慢于子插件的情况
-    window.addEventListener("siyuan-api-manager:ready", () => {
-      if (window.siyuanApiManager) {
-        window.siyuanApiManager.register(this.name, this.displayName, sync, localConfig);
+    // 兼容思源插件并行加载时，开关/旋钮加载慢于子插件的情况
+    window.addEventListener("siyuan-api-switch:ready", () => {
+      if (window.siyuanApiSwitch) {
+        window.siyuanApiSwitch.register(this.name, this.displayName, sync, localConfig);
       }
     }, { once: true });
   }
@@ -98,8 +98,8 @@ private initApiManagerSync() {
 
 ```typescript
 onunload() {
-  if (window.siyuanApiManager) {
-    window.siyuanApiManager.unregister(this.name);
+  if (window.siyuanApiSwitch) {
+    window.siyuanApiSwitch.unregister(this.name);
   }
 }
 ```

@@ -5,7 +5,7 @@ import {
 import "@/index.scss";
 import PluginInfoString from '@/../plugin.json'
 import { destroy, init } from '@/main'
-import { apiManagerCore } from "@/services/api-manager-core";
+import { apiSwitchCore } from "@/services/api-switch-core";
 
 let PluginInfo = {
   version: '',
@@ -53,14 +53,14 @@ export default class PluginSample extends Plugin {
 
     console.log('Plugin loaded, the plugin is ', this)
 
-    // 初始化 API 管理核心
-    await apiManagerCore.initialize(this);
+    // 初始化 API 旋钮核心
+    await apiSwitchCore.initialize(this);
 
     init(this)
   }
 
   onunload() {
-    apiManagerCore.destroy();
+    apiSwitchCore.destroy();
     destroy()
   }
 

@@ -1,7 +1,7 @@
 {
-  "name": "siyuan-api-manager",
+  "name": "siyuan-api-switch",
   "author": "famotime",
-  "url": "https://github.com/famotime/siyuan-api-manager",
+  "url": "https://github.com/famotime/siyuan-api-switch",
   "version": "0.0.1",
   "minAppVersion": "2.10.14",
   "disabledInPublish": true,
@@ -12,14 +12,14 @@
     "all"
   ],
   "displayName": {
-    "default": "siyuan-api-manager",
-    "en_US": "SiYuan API Manager",
-    "zh_CN": "API 管家"
+    "default": "siyuan-api-switch",
+    "en_US": "SiYuan API Switch",
+    "zh_CN": "API 旋钮"
   },
   "description": {
-    "default": "Unified AI API manager for SiYuan plugins.",
+    "default": "Unified AI API switch for SiYuan plugins.",
     "en_US": "Provide unified AI API configurations and profile sharing for other plugins.",
-    "zh_CN": "思源笔记 API 管家，为本地其他 AI 插件提供一键共享、分发和接管 API 的管家式服务。"
+    "zh_CN": "思源笔记 API 旋钮，为本地其他 AI 插件提供一键共享、分发和接管 API 的服务。"
   },
   "readme": {
     "default": "README.md",
