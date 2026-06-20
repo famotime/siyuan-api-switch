@@ -512,9 +512,10 @@ const onProviderChange = () => {
   const prov = editingProfile.value.provider
   const defaults = providerDefaults[prov]
   if (defaults) {
-    editingProfile.value.baseUrl = defaults.baseUrl
-    editingProfile.value.model = defaults.model
-    editingProfile.value.providerUrl = defaults.providerUrl
+    // 仅在字段为空时填充默认值，已有信息不覆盖
+    if (!editingProfile.value.baseUrl) editingProfile.value.baseUrl = defaults.baseUrl
+    if (!editingProfile.value.model) editingProfile.value.model = defaults.model
+    if (!editingProfile.value.providerUrl) editingProfile.value.providerUrl = defaults.providerUrl
   }
 }
 
