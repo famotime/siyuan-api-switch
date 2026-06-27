@@ -13,7 +13,7 @@ let PluginInfo = {
 try {
   PluginInfo = PluginInfoString
 } catch (err) {
-  console.log('Plugin info parse error: ', err)
+  if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('Plugin info parse error: ', err); }
 }
 const {
   version,
@@ -51,7 +51,7 @@ export default class PluginSample extends Plugin {
       this.isElectron = false
     }
 
-    console.log('Plugin loaded, the plugin is ', this)
+    if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('Plugin loaded, the plugin is ', this); }
 
     // 初始化 API 旋钮核心
     await apiSwitchCore.initialize(this);

@@ -6,12 +6,12 @@ import App from './App.vue'
 
 let plugin = null
 export function usePlugin(pluginProps?: Plugin): Plugin {
-  console.log('usePlugin', pluginProps, plugin)
+  if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('usePlugin', pluginProps, plugin); }
   if (pluginProps) {
     plugin = pluginProps
   }
   if (!plugin && !pluginProps) {
-    console.error('need bind plugin')
+    if (localStorage.getItem("sy_api_switch_debug") === "true") { console.error('need bind plugin'); }
   }
   return plugin;
 }
