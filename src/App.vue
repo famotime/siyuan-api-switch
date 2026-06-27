@@ -8,7 +8,7 @@
             <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
             <span>API 旋钮 (siyuan-api-switch)</span>
           </div>
-          <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口">
+          <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
@@ -30,10 +30,11 @@
                       class="import-siyuan-btn" 
                       @click="importSiyuanBuiltInAi" 
                       data-tooltip="从思源设置导入 AI 配置"
+                      data-tooltip-position="bottom"
                     >
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     </button>
-                    <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
+                    <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置" data-tooltip-position="bottom">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
                   </div>
@@ -49,7 +50,7 @@
                       <div class="profile-item-name">{{ prof.name }}</div>
                       <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
                     </div>
-                    <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置">
+                    <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                   </div>
@@ -82,7 +83,7 @@
                       </div>
                       <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
                     </div>
-                    <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管">
+                    <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
                     </button>
                   </div>
@@ -117,7 +118,7 @@
                   <div class="form-group col-6">
                     <div class="label-with-link">
                       <label>AI 服务商 *</label>
-                      <a v-if="editingProfile.providerUrl" href="javascript:void(0)" @click.prevent="openProviderUrl(editingProfile.providerUrl)" class="provider-link-btn" data-tooltip="前往官网获取 API Key">
+                      <a v-if="editingProfile.providerUrl" href="javascript:void(0)" @click.prevent="openProviderUrl(editingProfile.providerUrl)" class="provider-link-btn" data-tooltip="前往官网获取 API Key" data-tooltip-position="bottom">
                         <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" style="fill:none!important"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                       </a>
                     </div>
@@ -145,7 +146,7 @@
                       v-model="editingProfile.apiKey" 
                       placeholder="sk-..." 
                     />
-                    <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'">
+                    <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'" data-tooltip-position="left">
                       <svg v-if="showApiKey" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" style="fill:none!important"></path><circle cx="12" cy="12" r="3" style="fill:none!important"></circle></svg>
                       <svg v-else viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" style="fill:none!important"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
                     </button>
@@ -1422,6 +1423,7 @@ const onBindingChange = async (e: Event) => {
     bottom: 125%;
     left: 50%;
     transform: translateX(-50%) scale(0.8);
+    transform-origin: center bottom;
     background-color: var(--b3-theme-on-background, #2c3e50);
     color: var(--b3-theme-background, #ffffff);
     padding: 5px 8px;
@@ -1439,6 +1441,43 @@ const onBindingChange = async (e: Event) => {
   &:hover::after {
     opacity: 1;
     transform: translateX(-50%) scale(1);
+  }
+
+  /* 下方定位 */
+  &[data-tooltip-position="bottom"]::after {
+    bottom: auto;
+    top: 125%;
+    left: 50%;
+    transform: translateX(-50%) scale(0.8);
+    transform-origin: center top;
+  }
+  &[data-tooltip-position="bottom"]:hover::after {
+    transform: translateX(-50%) scale(1);
+  }
+
+  /* 左侧定位 */
+  &[data-tooltip-position="left"]::after {
+    bottom: auto;
+    left: auto;
+    top: 50%;
+    right: 125%;
+    transform: translateY(-50%) scale(0.8);
+    transform-origin: right center;
+  }
+  &[data-tooltip-position="left"]:hover::after {
+    transform: translateY(-50%) scale(1);
+  }
+
+  /* 右侧定位 */
+  &[data-tooltip-position="right"]::after {
+    bottom: auto;
+    left: 125%;
+    top: 50%;
+    transform: translateY(-50%) scale(0.8);
+    transform-origin: left center;
+  }
+  &[data-tooltip-position="right"]:hover::after {
+    transform: translateY(-50%) scale(1);
   }
 }
 
