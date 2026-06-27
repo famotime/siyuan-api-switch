@@ -1,4 +1,4 @@
-import { Plugin } from "siyuan";
+import { Plugin, fetchSyncPost } from "siyuan";
 import { SharedConfig, SiyuanApiSwitch } from "@/types";
 
 export interface ApiProfile {
@@ -281,7 +281,6 @@ class ApiSwitchCore {
     if (!profile) return;
     
     try {
-      const { fetchSyncPost } = await import("siyuan");
       const currentOpenAi = (window as any).siyuan?.config?.ai?.openAI || {};
       
       const updatedOpenAi = {
