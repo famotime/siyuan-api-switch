@@ -17,78 +17,87 @@
         <div class="dialog-body">
           <!-- 左侧导航栏 -->
           <div class="dialog-sidebar">
-            <div class="sidebar-section">
-              <div class="section-title">
-                <div class="title-text">
-                  <span class="title-indicator"></span>
-                  <span>API 配置轮廓 (Profiles)</span>
+            <div class="sidebar-scroll-content">
+              <div class="sidebar-section">
+                <div class="section-title">
+                  <div class="title-text">
+                    <span class="title-indicator"></span>
+                    <span>API 配置轮廓 (Profiles)</span>
+                  </div>
+                  <div class="title-actions">
+                    <button 
+                      v-if="hasSiyuanBuiltInAi" 
+                      class="import-siyuan-btn" 
+                      @click="importSiyuanBuiltInAi" 
+                      data-tooltip="从思源设置导入 AI 配置"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    </button>
+                    <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                  </div>
                 </div>
-                <div class="title-actions">
-                  <button 
-                    v-if="hasSiyuanBuiltInAi" 
-                    class="import-siyuan-btn" 
-                    @click="importSiyuanBuiltInAi" 
-                    data-tooltip="从思源设置导入 AI 配置"
+                <div class="profile-list">
+                  <div 
+                    v-for="prof in profiles" 
+                    :key="prof.id" 
+                    :class="['profile-item', { active: selectedProfileId === prof.id }]"
+                    @click="selectProfile(prof.id)"
                   >
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  </button>
-                  <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  </button>
+                    <div class="profile-item-meta">
+                      <div class="profile-item-name">{{ prof.name }}</div>
+                      <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
+                    </div>
+                    <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                  </div>
+                  <div v-if="profiles.length === 0" class="empty-list">
+                    暂无 API 配置，点击上方 + 创建
+                  </div>
                 </div>
               </div>
-              <div class="profile-list">
-                <div 
-                  v-for="prof in profiles" 
-                  :key="prof.id" 
-                  :class="['profile-item', { active: selectedProfileId === prof.id }]"
-                  @click="selectProfile(prof.id)"
-                >
-                  <div class="profile-item-meta">
-                    <div class="profile-item-name">{{ prof.name }}</div>
-                    <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
+
+              <div class="sidebar-section">
+                <div class="section-title">
+                  <div class="title-text">
+                    <span class="title-indicator"></span>
+                    <span>子插件接管 (Bindings)</span>
                   </div>
-                  <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                  </button>
                 </div>
-                <div v-if="profiles.length === 0" class="empty-list">
-                  暂无 API 配置，点击上方 + 创建
+                <div class="plugin-list">
+                  <div 
+                    v-for="plug in registeredPlugins" 
+                    :key="plug.pluginId" 
+                    :class="['plugin-item', { active: activePluginId === plug.pluginId }]"
+                    @click="selectPlugin(plug.pluginId)"
+                  >
+                    <div class="plugin-item-info">
+                      <div class="plugin-item-header">
+                        <span class="plugin-name">{{ plug.displayName }}</span>
+                        <span :class="['status-badge', plug.isBound ? 'bound' : 'unbound']">
+                          {{ plug.isBound ? '已接管' : '独立配置' }}
+                        </span>
+                      </div>
+                      <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
+                    </div>
+                    <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
+                    </button>
+                  </div>
+                  <div v-if="registeredPlugins.length === 0" class="empty-list">
+                    暂无活跃的兼容子插件
+                  </div>
                 </div>
               </div>
             </div>
-
-            <div class="sidebar-section">
-              <div class="section-title">
-                <div class="title-text">
-                  <span class="title-indicator"></span>
-                  <span>子插件接管 (Bindings)</span>
-                </div>
-              </div>
-              <div class="plugin-list">
-                <div 
-                  v-for="plug in registeredPlugins" 
-                  :key="plug.pluginId" 
-                  :class="['plugin-item', { active: activePluginId === plug.pluginId }]"
-                  @click="selectPlugin(plug.pluginId)"
-                >
-                  <div class="plugin-item-info">
-                    <div class="plugin-item-header">
-                      <span class="plugin-name">{{ plug.displayName }}</span>
-                      <span :class="['status-badge', plug.isBound ? 'bound' : 'unbound']">
-                        {{ plug.isBound ? '已接管' : '独立配置' }}
-                      </span>
-                    </div>
-                    <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
-                  </div>
-                  <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管">
-                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
-                  </button>
-                </div>
-                <div v-if="registeredPlugins.length === 0" class="empty-list">
-                  暂无活跃的兼容子插件
-                </div>
-              </div>
+            
+            <div class="sidebar-footer">
+              <label class="log-switch-label" title="开启后，在删除配置或同步过程中若遇到异常，会弹窗提示详细堆栈">
+                <input type="checkbox" v-model="enableDebugLog" @change="saveLogSetting" />
+                <span>启用日志调试</span>
+              </label>
             </div>
           </div>
 
@@ -310,6 +319,27 @@ const activePlugin = ref<RegisteredPluginInfo | null>(null)
 const editingProfile = ref<ApiProfile | null>(null)
 const isNewProfile = ref(false)
 
+// 日志调试开关及工具函数
+const enableDebugLog = ref(localStorage.getItem("sy_api_switch_debug") === "true")
+
+const saveLogSetting = () => {
+  localStorage.setItem("sy_api_switch_debug", enableDebugLog.value ? "true" : "false")
+  showMessage(enableDebugLog.value ? "已开启日志调试模式" : "已关闭日志调试模式", 3000, "info")
+}
+
+const logDebug = (message: string, ...args: any[]) => {
+  if (enableDebugLog.value) {
+    console.log(`[API Switch Debug] ${message}`, ...args)
+    if (message.toLowerCase().includes("error") || message.toLowerCase().includes("fail") || args.some(a => a instanceof Error)) {
+      const errorObj = args.find(a => a instanceof Error)
+      const errText = errorObj ? `${message}: ${errorObj.message}\n${errorObj.stack || ''}` : `${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`
+      showMessage(`调试日志: ${errText.substring(0, 300)}`, 10000, "error")
+    } else {
+      showMessage(`调试日志: ${message}`, 3000, "info")
+    }
+  }
+}
+
 // 记录原始快照用于脏检查
 const originalProfileState = ref<string>("")
 
@@ -338,6 +368,7 @@ const confirmDialog = ref<ConfirmState>({
 })
 
 const showCustomConfirm = (title: string, text: string, onConfirm: () => void, onCancel?: () => void) => {
+  logDebug(`showCustomConfirm called: ${title}`)
   confirmDialog.value = {
     show: true,
     title,
@@ -348,11 +379,36 @@ const showCustomConfirm = (title: string, text: string, onConfirm: () => void, o
 }
 
 const closeConfirm = (result: boolean) => {
+  logDebug(`closeConfirm called with result: ${result}`)
   confirmDialog.value.show = false
   if (result) {
-    if (confirmDialog.value.onConfirm) confirmDialog.value.onConfirm()
+    if (confirmDialog.value.onConfirm) {
+      try {
+        logDebug("Executing onConfirm callback")
+        const res = confirmDialog.value.onConfirm()
+        if (res instanceof Promise) {
+          res.catch(err => {
+            logDebug("Async error in onConfirm callback", err)
+          })
+        }
+      } catch (err) {
+        logDebug("Sync error in onConfirm callback", err)
+      }
+    }
   } else {
-    if (confirmDialog.value.onCancel) confirmDialog.value.onCancel()
+    if (confirmDialog.value.onCancel) {
+      try {
+        logDebug("Executing onCancel callback")
+        const res = confirmDialog.value.onCancel()
+        if (res instanceof Promise) {
+          res.catch(err => {
+            logDebug("Async error in onCancel callback", err)
+          })
+        }
+      } catch (err) {
+        logDebug("Sync error in onCancel callback", err)
+      }
+    }
   }
 }
 
@@ -663,37 +719,61 @@ const saveProfile = async () => {
 }
 
 const deleteProfile = async (id: string) => {
+  logDebug(`deleteProfile triggered for id: ${id}`)
   showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
-    originalProfileState.value = "" // 阻止脏检查
-    await apiSwitchCore.deleteProfile(id)
-    activeView.value = 'empty'
-    selectedProfileId.value = null
-    refreshData()
-    showMessage("配置已成功删除", 3000, "info")
-    
-    // 错开 tick 设为 null，防止销毁前触发表单空指针
-    setTimeout(() => {
-      editingProfile.value = null
-    }, 0)
+    try {
+      logDebug(`deleteProfile onConfirm started for id: ${id}`)
+      originalProfileState.value = "" // 阻止脏检查
+      
+      logDebug(`Calling apiSwitchCore.deleteProfile for id: ${id}`)
+      await apiSwitchCore.deleteProfile(id)
+      logDebug(`apiSwitchCore.deleteProfile successful for id: ${id}`)
+      
+      activeView.value = 'empty'
+      selectedProfileId.value = null
+      
+      logDebug("Refreshing data after deletion")
+      refreshData()
+      showMessage("配置已成功删除", 3000, "info")
+      
+      // 错开 tick 设为 null，防止销毁前触发表单空指针
+      setTimeout(() => {
+        editingProfile.value = null
+        logDebug("editingProfile cleared in setTimeout (deleteProfile)")
+      }, 0)
+    } catch (err) {
+      logDebug("Exception caught in deleteProfile onConfirm", err)
+    }
   })
 }
 
 // 侧边栏 Hover 快捷删除
 const quickDeleteProfile = (prof: ApiProfile) => {
+  logDebug(`quickDeleteProfile triggered for id: ${prof.id}, name: ${prof.name}`)
   showCustomConfirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
-    if (editingProfile.value && editingProfile.value.id === prof.id) {
-      originalProfileState.value = "" // 阻止脏检查
-      activeView.value = 'empty'
-      selectedProfileId.value = null
+    try {
+      logDebug(`quickDeleteProfile onConfirm started for id: ${prof.id}`)
+      if (editingProfile.value && editingProfile.value.id === prof.id) {
+        originalProfileState.value = "" // 阻止脏检查
+        activeView.value = 'empty'
+        selectedProfileId.value = null
+        
+        // 错开 tick 设为 null，防止销毁前触发表单空指针
+        setTimeout(() => {
+          editingProfile.value = null
+          logDebug("editingProfile cleared in setTimeout (quickDeleteProfile)")
+        }, 0)
+      }
       
-      // 错开 tick 设为 null，防止销毁前触发表单空指针
-      setTimeout(() => {
-        editingProfile.value = null
-      }, 0)
+      logDebug(`Calling apiSwitchCore.deleteProfile for id: ${prof.id}`)
+      await apiSwitchCore.deleteProfile(prof.id)
+      logDebug(`apiSwitchCore.deleteProfile successful for id: ${prof.id}`)
+      
+      refreshData()
+      showMessage(`配置「${prof.name}」已成功删除`, 3000, "info")
+    } catch (err) {
+      logDebug("Exception caught in quickDeleteProfile onConfirm", err)
     }
-    await apiSwitchCore.deleteProfile(prof.id)
-    refreshData()
-    showMessage(`配置「${prof.name}」已成功删除`, 3000, "info")
   })
 }
 
@@ -805,9 +885,43 @@ const onBindingChange = async (e: Event) => {
   background-color: var(--b3-theme-surface);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-scroll-content {
+  flex: 1;
   overflow-y: auto;
   padding: 16px 0;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
+}
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--b3-border-color);
+  background-color: var(--b3-theme-surface);
+  display: flex;
+  align-items: center;
+}
+
+.log-switch-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--b3-theme-on-surface-mute, #888);
+  cursor: pointer;
+  user-select: none;
+  
+  input[type="checkbox"] {
+    cursor: pointer;
+    margin: 0;
+  }
+  
+  &:hover {
+    color: var(--b3-theme-primary);
+  }
 }
 
 .sidebar-section {

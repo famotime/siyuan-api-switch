@@ -210,13 +210,20 @@ class ApiSwitchCore {
   async deleteProfile(profileId: string) {
     this.profiles = this.profiles.filter((p) => p.id !== profileId);
     
-    // 对绑定了这个 Profile 的插件解除接管
+    // 先找出所有绑定了此 Profile 的插件 ID，不直接在循环中修改 bindings 对象，规避遍历时修改属性的潜在引擎报错
+    const pluginsToUnbind: string[] = [];
     for (const pluginId in this.bindings) {
       if (this.bindings[pluginId] === profileId) {
-        delete this.bindings[pluginId];
-        this.notifyPluginUpdate(pluginId, null);
+        pluginsToUnbind.push(pluginId);
       }
     }
+    
+    // 统一执行解绑与通知
+    for (const pluginId of pluginsToUnbind) {
+      delete this.bindings[pluginId];
+      this.notifyPluginUpdate(pluginId, null);
+    }
+    
     await this.save();
   }
 
