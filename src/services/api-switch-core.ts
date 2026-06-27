@@ -220,6 +220,43 @@ class ApiSwitchCore {
     await this.save();
   }
 
+  // 将最新的 Profile 同步给思源笔记内置的 AI 配置
+  private async updateSiyuanSystemAi(profile: ApiProfile | null) {
+    if (!profile) return;
+    
+    try {
+      const { fetchSyncPost } = await import("siyuan");
+      const currentOpenAi = (window as any).siyuan?.config?.ai?.openAI || {};
+      
+      const updatedOpenAi = {
+        ...currentOpenAi,
+        apiBaseURL: profile.baseUrl,
+        apiKey: profile.apiKey,
+        apiModel: profile.model,
+        apiTimeout: profile.requestTimeoutSeconds ?? 30,
+        apiTemperature: profile.temperature ?? 0.7,
+        apiMaxTokens: profile.maxTokens ?? 4096,
+      };
+      
+      // 调用思源接口修改设置
+      const res = await fetchSyncPost("/api/setting/setAI", {
+        openAI: updatedOpenAi
+      });
+      
+      if (res && res.code === 0) {
+        // 同步修改内存配置，方便前端立即响应
+        if ((window as any).siyuan?.config?.ai) {
+          (window as any).siyuan.config.ai.openAI = updatedOpenAi;
+        }
+        console.log("[API Switch] Successfully synchronized to Siyuan system AI");
+      } else {
+        console.error("[API Switch] Failed to synchronize to Siyuan system AI", res);
+      }
+    } catch (err) {
+      console.error("[API Switch] Error updating Siyuan system AI", err);
+    }
+  }
+
   // 管理绑定
   async bindPlugin(pluginId: string, profileId: string) {
     if (!profileId) {
@@ -229,6 +266,12 @@ class ApiSwitchCore {
       this.bindings[pluginId] = profileId;
       const config = this.getBoundSharedConfig(pluginId);
       this.notifyPluginUpdate(pluginId, config);
+      
+      // 如果是思源内置AI，则写回思源配置
+      if (pluginId === "siyuan_builtin") {
+        const profile = this.profiles.find(p => p.id === profileId) || null;
+        await this.updateSiyuanSystemAi(profile);
+      }
     }
     await this.save();
   }
@@ -238,6 +281,12 @@ class ApiSwitchCore {
       if (this.bindings[pluginId] === profileId) {
         const config = this.getBoundSharedConfig(pluginId);
         this.notifyPluginUpdate(pluginId, config);
+        
+        // 如果思源内置AI绑定了该Profile，则同步更新
+        if (pluginId === "siyuan_builtin") {
+          const profile = this.profiles.find(p => p.id === profileId) || null;
+          this.updateSiyuanSystemAi(profile);
+        }
       }
     }
   }
@@ -258,7 +307,7 @@ class ApiSwitchCore {
   getRegisteredPlugins(): RegisteredPluginInfo[] {
     const list: RegisteredPluginInfo[] = [];
     
-    // 从已注册的 Map 里拿插件，同时查一下 bindings
+    // 从已注册 of Map 里拿插件，同时查一下 bindings
     for (const [pluginId, reg] of this.registrations.entries()) {
       const boundId = this.bindings[pluginId] || "";
       list.push({
@@ -269,6 +318,33 @@ class ApiSwitchCore {
         localConfig: reg.localConfig,
       });
     }
+
+    // 内置一个思源设置的虚拟“子插件”，允许对其进行接管
+    const siyuanBoundId = this.bindings["siyuan_builtin"] || "";
+    let siyuanLocalConfig: any = undefined;
+    try {
+      const openAI = (window as any).siyuan?.config?.ai?.openAI;
+      if (openAI && openAI.apiKey && openAI.apiKey.trim() !== "") {
+        siyuanLocalConfig = {
+          provider: "openai",
+          baseUrl: openAI.apiBaseURL || "",
+          apiKey: openAI.apiKey || "",
+          model: openAI.apiModel || "",
+          requestTimeoutSeconds: openAI.apiTimeout ?? 30,
+          temperature: openAI.apiTemperature ?? 0.7,
+          maxTokens: openAI.apiMaxTokens ?? 4096,
+        };
+      }
+    } catch (e) {}
+
+    list.push({
+      pluginId: "siyuan_builtin",
+      displayName: "思源笔记内置 AI",
+      isBound: Boolean(siyuanBoundId),
+      boundProfileId: siyuanBoundId,
+      localConfig: siyuanLocalConfig
+    });
+
     return list;
   }
 

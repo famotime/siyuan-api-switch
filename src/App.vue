@@ -23,9 +23,19 @@
                   <span class="title-indicator"></span>
                   <span>API 配置轮廓 (Profiles)</span>
                 </div>
-                <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
-                  <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                </button>
+                <div class="title-actions">
+                  <button 
+                    v-if="hasSiyuanBuiltInAi" 
+                    class="import-siyuan-btn" 
+                    @click="importSiyuanBuiltInAi" 
+                    data-tooltip="从思源设置导入 AI 配置"
+                  >
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  </button>
+                  <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置">
+                    <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  </button>
+                </div>
               </div>
               <div class="profile-list">
                 <div 
@@ -245,6 +255,20 @@
               <svg class="welcome-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
               <h2>欢迎使用 API 旋钮</h2>
               <p>左侧点击「+」可以创建多套不同的 AI 供应商配置。选择接管子插件，实现一键共享、无缝切换模型与供应商。</p>
+
+              <!-- 快捷导入思源配置卡片 -->
+              <div v-if="hasSiyuanBuiltInAi" class="siyuan-import-card animate-fade-in">
+                <div class="card-icon">
+                  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                </div>
+                <div class="card-content">
+                  <div class="card-title">检测到思源笔记已配置内置 AI</div>
+                  <div class="card-desc">自动读取思源笔记「设置 -> AI」中配置的信息：{{ siyuanBuiltInAiInfo }}。</div>
+                  <button class="b3-button b3-button--primary import-action-btn" @click="importSiyuanBuiltInAi">
+                    一键导入并创建 Profile
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -406,6 +430,71 @@ const openProviderUrl = (url: string) => {
   }
 }
 
+const hasSiyuanBuiltInAi = ref(false)
+const siyuanBuiltInAiInfo = ref("")
+
+// 检测思源笔记内置的 AI 配置信息
+const checkSiyuanBuiltInAi = () => {
+  try {
+    const openAI = (window as any).siyuan?.config?.ai?.openAI
+    if (openAI && openAI.apiKey && openAI.apiKey.trim() !== "") {
+      hasSiyuanBuiltInAi.value = true
+      const provider = openAI.apiProvider || "OpenAI"
+      const model = openAI.apiModel || "未指定模型"
+      siyuanBuiltInAiInfo.value = `${provider} (${model})`
+    } else {
+      hasSiyuanBuiltInAi.value = false
+    }
+  } catch (err) {
+    hasSiyuanBuiltInAi.value = false
+  }
+}
+
+// 导入思源内置的 AI 配置信息
+const importSiyuanBuiltInAi = async () => {
+  try {
+    const openAI = (window as any).siyuan?.config?.ai?.openAI
+    if (!openAI || !openAI.apiKey) {
+      showMessage("未检测到有效的思源内置 AI 配置", 5000, "error")
+      return
+    }
+
+    const baseUrl = openAI.apiBaseURL || ""
+    const baseUrlLower = baseUrl.toLowerCase()
+    let provider = "openai"
+    if (openAI.apiProvider === "Azure") {
+      provider = "custom"
+    } else if (baseUrlLower.includes("deepseek")) {
+      provider = "deepseek"
+    } else if (baseUrlLower.includes("siliconflow")) {
+      provider = "siliconflow"
+    } else if (baseUrlLower.includes("gemini") || baseUrlLower.includes("googleapis")) {
+      provider = "gemini"
+    }
+
+    const newProfile: Omit<ApiProfile, "id"> = {
+      name: `思源内置 AI (${openAI.apiProvider || 'OpenAI'})`,
+      provider: provider,
+      baseUrl: baseUrl,
+      apiKey: openAI.apiKey,
+      model: openAI.apiModel || "",
+      requestTimeoutSeconds: openAI.apiTimeout || 30,
+      temperature: openAI.apiTemperature ?? 0.7,
+      maxTokens: openAI.apiMaxTokens || 4096,
+      memo: "从思源笔记『设置 -> AI』一键自动导入的配置",
+      providerUrl: providerDefaults[provider]?.providerUrl || ""
+    }
+
+    const added = await apiSwitchCore.addProfile(newProfile)
+    showMessage("成功导入思源内置 AI 配置", 3000, "info")
+    refreshData()
+    selectProfile(added.id)
+  } catch (err) {
+    console.error("[API Switch] Failed to import Siyuan AI config", err)
+    showMessage("导入失败，请检查思源内置 AI 配置是否正确", 5000, "error")
+  }
+}
+
 // 数据同步刷新
 const refreshData = () => {
   profiles.value = [...apiSwitchCore.getProfiles()]
@@ -414,6 +503,9 @@ const refreshData = () => {
   if (activePluginId.value) {
     activePlugin.value = registeredPlugins.value.find(p => p.pluginId === activePluginId.value) || null
   }
+
+  // 刷新时同步检查思源内置 AI
+  checkSiyuanBuiltInAi()
 }
 
 const importLocalConfig = async (pluginId: string) => {
@@ -1317,6 +1409,83 @@ const onBindingChange = async (e: Event) => {
     display: flex;
     justify-content: flex-end;
     gap: 12px;
+  }
+}
+
+/* 导入思源内置AI相关的样式 */
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.import-siyuan-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--b3-theme-primary);
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    background-color: var(--b3-theme-background-hover);
+  }
+}
+
+.siyuan-import-card {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: var(--b3-theme-surface);
+  border: 1px dashed var(--b3-border-color);
+  border-radius: 8px;
+  max-width: 400px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  text-align: left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+
+  .card-icon {
+    padding: 8px;
+    background-color: rgba(63, 81, 181, 0.1);
+    color: var(--b3-theme-primary);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .card-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--b3-theme-on-background);
+  }
+
+  .card-desc {
+    font-size: 11px;
+    color: var(--b3-theme-on-surface-mute, #888);
+    line-height: 1.5;
+  }
+
+  .import-action-btn {
+    margin-top: 10px;
+    align-self: flex-start;
+    padding: 6px 14px;
+    font-size: 12px;
   }
 }
 </style>
