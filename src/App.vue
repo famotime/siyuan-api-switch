@@ -282,8 +282,11 @@
           </div>
         </div>
 
-        <!-- 自定义精美确认弹窗 -->
-        <div class="confirm-overlay" v-if="confirmDialog.show">
+              </div>
+    </div>
+
+    <!-- 自定义精美确认弹窗 (与 dialog-overlay 平级，移出 switch-dialog 以免被其 overflow: hidden 裁剪或事件冒泡阻挡) -->
+    <div class="confirm-overlay" v-if="confirmDialog.show">
           <div class="confirm-dialog animate-fade-in">
             <div class="confirm-title">{{ confirmDialog.title }}</div>
             <div class="confirm-text">{{ confirmDialog.text }}</div>
@@ -292,8 +295,6 @@
               <button class="b3-button b3-button--primary" @click="closeConfirm(true)">确定</button>
             </div>
           </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -1499,8 +1500,7 @@ const onBindingChange = async (e: Event) => {
   width: 100vw;
   height: 100vh;
   background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
-  z-index: 2100;
+    z-index: 2100;
   display: flex;
   justify-content: center;
   align-items: center;
