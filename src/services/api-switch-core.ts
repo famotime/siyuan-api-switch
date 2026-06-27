@@ -427,6 +427,27 @@ class ApiSwitchCore {
     await this.bindPlugin(pluginId, newProfile.id);
     this.log(`Imported local config from ${pluginId} to new profile: ${profileName}`);
   }
+
+  // 一键配置应用至所有接管项目
+  async applyProfileToAllPlugins(profileId: string) {
+    if (!profileId) return;
+    
+    // 获取全部待绑定插件，包括已注册的第三方子插件和虚拟的“思源内置AI”
+    const allPluginIds = [...this.registrations.keys(), "siyuan_builtin"];
+    
+    for (const pluginId of allPluginIds) {
+      this.bindings[pluginId] = profileId;
+      const config = this.getBoundSharedConfig(pluginId);
+      this.notifyPluginUpdate(pluginId, config);
+      
+      if (pluginId === "siyuan_builtin") {
+        const profile = this.profiles.find(p => p.id === profileId) || null;
+        await this.updateSiyuanSystemAi(profile);
+      }
+    }
+    
+    await this.save();
+  }
 }
 
 export const apiSwitchCore = new ApiSwitchCore();

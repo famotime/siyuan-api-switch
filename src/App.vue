@@ -69,6 +69,9 @@
                       <div class="profile-item-name">{{ prof.name }}</div>
                       <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
                     </div>
+                    <button class="profile-quick-apply" @click.stop="applyProfileToAll(prof)" data-tooltip="应用到所有接管项目" data-tooltip-position="left">
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    </button>
                     <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
@@ -832,6 +835,23 @@ const quickDeleteProfile = (prof: ApiProfile) => {
   })
 }
 
+// 侧边栏 Hover 快捷将当前配置应用到所有项目
+const applyProfileToAll = (prof: ApiProfile) => {
+  logDebug(`applyProfileToAll triggered for id: ${prof.id}, name: ${prof.name}`)
+  showCustomConfirm("一键配置", `确定要将 API 配置「${prof.name}」应用到所有接管项目吗？这将会覆盖当前所有子插件和思源内置 AI 的绑定配置。`, async () => {
+    try {
+      logDebug(`applyProfileToAll onConfirm started for id: ${prof.id}`)
+      await apiSwitchCore.applyProfileToAllPlugins(prof.id)
+      logDebug(`apiSwitchCore.applyProfileToAllPlugins successful for id: ${prof.id}`)
+      
+      refreshData()
+      showMessage(`配置「${prof.name}」已成功应用到所有接管项目`, 3000, "info")
+    } catch (err) {
+      logDebug("Exception caught in applyProfileToAll onConfirm", err)
+    }
+  })
+}
+
 // 侧边栏 Hover 快捷解除接管
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
@@ -1060,7 +1080,7 @@ const onBindingChange = async (e: Event) => {
     gap: 2px;
   }
 
-  .profile-quick-delete, .plugin-quick-unbind {
+  .profile-quick-delete, .profile-quick-apply, .plugin-quick-unbind {
     opacity: 0;
     background: none;
     border: none;
@@ -1072,18 +1092,29 @@ const onBindingChange = async (e: Event) => {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-left: 8px;
+    margin-left: 4px;
 
     &:hover {
       background-color: var(--b3-theme-background-hover);
-      color: var(--b3-theme-error, #f44336);
     }
+  }
+
+  .profile-quick-delete:hover {
+    color: var(--b3-theme-error, #f44336);
+  }
+
+  .profile-quick-apply:hover {
+    color: var(--b3-theme-primary, #4caf50);
+  }
+
+  .plugin-quick-unbind:hover {
+    color: var(--b3-theme-error, #f44336);
   }
 
   &:hover {
     background-color: var(--b3-theme-background-hover);
     
-    .profile-quick-delete, .plugin-quick-unbind {
+    .profile-quick-delete, .profile-quick-apply, .plugin-quick-unbind {
       opacity: 1;
     }
   }
