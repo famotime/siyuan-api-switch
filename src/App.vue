@@ -22,19 +22,38 @@
                 <div class="section-title">
                   <div class="title-text">
                     <span class="title-indicator"></span>
-                    <span>API 配置轮廓 (Profiles)</span>
+                    <span>API 配置文件 (Profiles)</span>
                   </div>
                   <div class="title-actions">
+                    <input 
+                      type="file" 
+                      ref="fileInputRef" 
+                      style="display: none" 
+                      accept=".json" 
+                      @change="handleFileImport" 
+                    />
                     <button 
-                      v-if="hasSiyuanBuiltInAi" 
-                      class="import-siyuan-btn" 
-                      @click="importSiyuanBuiltInAi" 
-                      data-tooltip="从思源设置导入 AI 配置"
+                      class="title-action-btn" 
+                      @click="triggerImport" 
+                      data-tooltip="导入 API 配置"
+                      data-tooltip-position="bottom"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    </button>
+                    <button 
+                      class="title-action-btn" 
+                      @click="exportProfiles" 
+                      data-tooltip="导出 API 配置"
                       data-tooltip-position="bottom"
                     >
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     </button>
-                    <button class="add-profile-btn" @click="createNewProfile" data-tooltip="添加新配置" data-tooltip-position="bottom">
+                    <button 
+                      class="title-action-btn" 
+                      @click="createNewProfile" 
+                      data-tooltip="添加新配置" 
+                      data-tooltip-position="bottom"
+                    >
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
                   </div>
@@ -238,7 +257,7 @@
                 </div>
 
                 <div class="form-group binding-select-group">
-                  <label>绑定 API 配置轮廓 (Profile)</label>
+                  <label>绑定 API 配置文件 (Profile)</label>
                   <select class="b3-select select-lg" :value="activePlugin.boundProfileId" @change="onBindingChange($event)">
                     <option value="">❌ 独立配置 (不接管此插件)</option>
                     <option v-for="prof in profiles" :key="prof.id" :value="prof.id">
@@ -508,48 +527,82 @@ const checkSiyuanBuiltInAi = () => {
   }
 }
 
-// 导入思源内置的 AI 配置信息
-const importSiyuanBuiltInAi = async () => {
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+const triggerImport = () => {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ""
+    fileInputRef.value.click()
+  }
+}
+
+const handleFileImport = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (!target.files || target.files.length === 0) return
+
+  const file = target.files[0]
+  const reader = new FileReader()
+  reader.onload = async (event) => {
+    try {
+      const content = event.target?.result as string
+      const parsed = JSON.parse(content)
+
+      let importedArray: ApiProfile[] = []
+      if (Array.isArray(parsed)) {
+        importedArray = parsed
+      } else if (parsed && typeof parsed === "object") {
+        if (Array.isArray(parsed.profiles)) {
+          importedArray = parsed.profiles
+        } else if (parsed.id && parsed.name && parsed.provider) {
+          importedArray = [parsed]
+        }
+      }
+
+      if (importedArray.length === 0) {
+        showMessage("未在文件中找到有效的 API 配置数据", 5000, "error")
+        return
+      }
+
+      showCustomConfirm(
+        "导入 API 配置",
+        `确定要从文件导入 ${importedArray.length} 个配置吗？重名的配置将被更新覆盖。`,
+        async () => {
+          try {
+            const { added, updated } = await apiSwitchCore.importProfiles(importedArray)
+            refreshData()
+            showMessage(`成功导入配置：新增 ${added} 个，更新 ${updated} 个`, 3000, "info")
+          } catch (err: any) {
+            console.error("导入 API 配置失败", err)
+            showMessage(`导入失败: ${err.message || err}`, 5000, "error")
+          }
+        }
+      )
+    } catch (err: any) {
+      console.error("解析导入的 JSON 文件失败", err)
+      showMessage(`解析文件失败: ${err.message || err}`, 5000, "error")
+    }
+  }
+  reader.readAsText(file)
+}
+
+const exportProfiles = () => {
   try {
-    const openAI = (window as any).siyuan?.config?.ai?.openAI
-    if (!openAI || !openAI.apiKey) {
-      showMessage("未检测到有效的思源内置 AI 配置", 5000, "error")
+    if (profiles.value.length === 0) {
+      showMessage("当前没有可导出的 API 配置", 3000, "warning")
       return
     }
-
-    const baseUrl = openAI.apiBaseURL || ""
-    const baseUrlLower = baseUrl.toLowerCase()
-    let provider = "openai"
-    if (openAI.apiProvider === "Azure") {
-      provider = "custom"
-    } else if (baseUrlLower.includes("deepseek")) {
-      provider = "deepseek"
-    } else if (baseUrlLower.includes("siliconflow")) {
-      provider = "siliconflow"
-    } else if (baseUrlLower.includes("gemini") || baseUrlLower.includes("googleapis")) {
-      provider = "gemini"
-    }
-
-    const newProfile: Omit<ApiProfile, "id"> = {
-      name: `思源内置 AI (${openAI.apiProvider || 'OpenAI'})`,
-      provider: provider,
-      baseUrl: baseUrl,
-      apiKey: openAI.apiKey,
-      model: openAI.apiModel || "",
-      requestTimeoutSeconds: openAI.apiTimeout || 30,
-      temperature: openAI.apiTemperature ?? 0.7,
-      maxTokens: openAI.apiMaxTokens || 4096,
-      memo: "从思源笔记『设置 -> AI』一键自动导入的配置",
-      providerUrl: providerDefaults[provider]?.providerUrl || ""
-    }
-
-    const added = await apiSwitchCore.addProfile(newProfile)
-    showMessage("成功导入思源内置 AI 配置", 3000, "info")
-    refreshData()
-    selectProfile(added.id)
-  } catch (err) {
-    console.error("[API Switch] Failed to import Siyuan AI config", err)
-    showMessage("导入失败，请检查思源内置 AI 配置是否正确", 5000, "error")
+    const dataStr = JSON.stringify(profiles.value, null, 2)
+    const blob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `siyuan-api-profiles-${new Date().toISOString().slice(0, 10)}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+    showMessage(`已成功导出 ${profiles.value.length} 个配置文件`, 3000, "info")
+  } catch (err: any) {
+    console.error("导出配置文件失败", err)
+    showMessage(`导出失败: ${err.message || err}`, 5000, "error")
   }
 }
 
@@ -962,7 +1015,7 @@ const onBindingChange = async (e: Event) => {
       display: inline-block;
     }
 
-    .add-profile-btn {
+    .title-action-btn {
       background: none;
       border: none;
       cursor: pointer;
@@ -1583,25 +1636,7 @@ const onBindingChange = async (e: Event) => {
   gap: 8px;
 }
 
-.import-siyuan-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--b3-theme-primary);
-  padding: 2px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
 
-  svg {
-    width: 14px;
-    height: 14px;
-  }
-
-  &:hover {
-    background-color: var(--b3-theme-background-hover);
-  }
-}
 
 .siyuan-import-card {
   margin-top: 24px;

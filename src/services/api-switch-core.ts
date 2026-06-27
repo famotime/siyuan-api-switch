@@ -210,6 +210,43 @@ class ApiSwitchCore {
     return newProfile;
   }
 
+  async importProfiles(imported: ApiProfile[]): Promise<{ added: number; updated: number }> {
+    let added = 0;
+    let updated = 0;
+    for (const prof of imported) {
+      if (!prof || typeof prof !== "object") continue;
+      if (!prof.name || !prof.provider || !prof.model) continue;
+
+      const normalizedProf: ApiProfile = {
+        id: prof.id || "prof_" + Math.random().toString(36).substring(2, 11),
+        name: String(prof.name),
+        provider: String(prof.provider),
+        baseUrl: String(prof.baseUrl || ""),
+        apiKey: String(prof.apiKey || ""),
+        model: String(prof.model),
+        requestTimeoutSeconds: Number(prof.requestTimeoutSeconds ?? 30),
+        temperature: Number(prof.temperature ?? 0.7),
+        maxTokens: Number(prof.maxTokens ?? 4096),
+        memo: prof.memo ? String(prof.memo) : "",
+        providerUrl: prof.providerUrl ? String(prof.providerUrl) : ""
+      };
+
+      const existingIdx = this.profiles.findIndex((p) => p.id === normalizedProf.id);
+      if (existingIdx !== -1) {
+        this.profiles[existingIdx] = normalizedProf;
+        updated++;
+      } else {
+        this.profiles.push(normalizedProf);
+        added++;
+      }
+    }
+    
+    if (added > 0 || updated > 0) {
+      await this.save();
+    }
+    return { added, updated };
+  }
+
   async updateProfile(profile: ApiProfile) {
     const idx = this.profiles.findIndex((p) => p.id === profile.id);
     if (idx !== -1) {
