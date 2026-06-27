@@ -620,9 +620,12 @@ const selectPresetModel = (e: Event) => {
 
 const cancelEdit = () => {
   handleSafeNavigate(() => {
-    editingProfile.value = null
     activeView.value = 'empty'
     selectedProfileId.value = null
+    // 错开 tick 设为 null，避免 Vue 依赖更新时在表单模板中触发空指针异常
+    setTimeout(() => {
+      editingProfile.value = null
+    }, 0)
   })
 }
 
@@ -663,11 +666,15 @@ const deleteProfile = async (id: string) => {
   showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
     originalProfileState.value = "" // 阻止脏检查
     await apiSwitchCore.deleteProfile(id)
-    editingProfile.value = null
     activeView.value = 'empty'
     selectedProfileId.value = null
     refreshData()
     showMessage("配置已成功删除", 3000, "info")
+    
+    // 错开 tick 设为 null，防止销毁前触发表单空指针
+    setTimeout(() => {
+      editingProfile.value = null
+    }, 0)
   })
 }
 
@@ -676,9 +683,13 @@ const quickDeleteProfile = (prof: ApiProfile) => {
   showCustomConfirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
     if (editingProfile.value && editingProfile.value.id === prof.id) {
       originalProfileState.value = "" // 阻止脏检查
-      editingProfile.value = null
       activeView.value = 'empty'
       selectedProfileId.value = null
+      
+      // 错开 tick 设为 null，防止销毁前触发表单空指针
+      setTimeout(() => {
+        editingProfile.value = null
+      }, 0)
     }
     await apiSwitchCore.deleteProfile(prof.id)
     refreshData()
