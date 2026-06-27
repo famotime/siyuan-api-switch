@@ -48,6 +48,18 @@ class ApiSwitchCore {
 
   constructor() {}
 
+  private log(message: string, ...args: any[]) {
+    if (localStorage.getItem("sy_api_switch_debug") === "true") {
+      console.log(`[API Switch] ${message}`, ...args);
+    }
+  }
+
+  private logError(message: string, ...args: any[]) {
+    if (localStorage.getItem("sy_api_switch_debug") === "true") {
+      console.error(`[API Switch] ${message}`, ...args);
+    }
+  }
+
   async initialize(plugin: Plugin) {
     this.plugin = plugin;
     await this.loadData();
@@ -122,7 +134,7 @@ class ApiSwitchCore {
       try {
         reg.callback(null);
       } catch (err) {
-        console.error(`[API Switch] Error in callback during destroy for ${pluginId}`, err);
+        this.logError(`Error in callback during destroy for ${pluginId}`, err);
       }
     }
     
@@ -137,14 +149,14 @@ class ApiSwitchCore {
     localConfig?: Omit<SharedConfig, "profileId" | "profileName">
   ) {
     this.registrations.set(pluginId, { displayName, callback, localConfig });
-    console.log(`[API Switch] Plugin registered: ${displayName} (${pluginId})`, localConfig ? "with local config" : "without local config");
+    this.log(`Plugin registered: ${displayName} (${pluginId})`, localConfig ? "with local config" : "without local config");
 
     // 注册时立即将当前绑定的配置通知过去
     const boundConfig = this.getBoundSharedConfig(pluginId);
     try {
       callback(boundConfig);
     } catch (err) {
-      console.error(`[API Switch] Error during initial register callback for ${pluginId}`, err);
+      this.logError(`Error during initial register callback for ${pluginId}`, err);
     }
 
     if (this.onStateChange) {
@@ -154,7 +166,7 @@ class ApiSwitchCore {
 
   private unregisterPlugin(pluginId: string) {
     this.registrations.delete(pluginId);
-    console.log(`[API Switch] Plugin unregistered: ${pluginId}`);
+    this.log(`Plugin unregistered: ${pluginId}`);
     if (this.onStateChange) {
       this.onStateChange();
     }
@@ -303,9 +315,9 @@ class ApiSwitchCore {
     if (reg) {
       try {
         reg.callback(config);
-        console.log(`[API Switch] Notified plugin ${pluginId} with config update`);
+        this.log(`Notified plugin ${pluginId} with config update`);
       } catch (err) {
-        console.error(`[API Switch] Failed to notify plugin ${pluginId}`, err);
+        this.logError(`Failed to notify plugin ${pluginId}`, err);
       }
     }
   }
@@ -377,7 +389,7 @@ class ApiSwitchCore {
     });
 
     await this.bindPlugin(pluginId, newProfile.id);
-    console.log(`[API Switch] Imported local config from ${pluginId} to new profile: ${profileName}`);
+    this.log(`Imported local config from ${pluginId} to new profile: ${profileName}`);
   }
 }
 
