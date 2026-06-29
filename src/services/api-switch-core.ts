@@ -8,6 +8,7 @@ export interface ApiProfile {
   baseUrl: string;
   apiKey: string;
   model: string;
+  models?: string[];
   requestTimeoutSeconds: number;
   temperature: number;
   maxTokens: number;
@@ -72,6 +73,12 @@ class ApiSwitchCore {
       const data = await this.plugin.loadData(STORAGE_KEY);
       if (data) {
         this.profiles = Array.isArray(data.profiles) ? data.profiles : [];
+        // 数据向后兼容兼容：若 models 不存在，则用 [model] 初始化
+        this.profiles.forEach((p) => {
+          if (!p.models || !Array.isArray(p.models)) {
+            p.models = p.model ? [p.model] : [];
+          }
+        });
         this.bindings = data.bindings && typeof data.bindings === "object" ? data.bindings : {};
       } else {
         this.profiles = [];
@@ -187,6 +194,7 @@ class ApiSwitchCore {
       baseUrl: profile.baseUrl,
       apiKey: profile.apiKey,
       model: profile.model,
+      models: profile.models || (profile.model ? [profile.model] : []),
       requestTimeoutSeconds: profile.requestTimeoutSeconds,
       temperature: profile.temperature,
       maxTokens: profile.maxTokens,
@@ -204,6 +212,7 @@ class ApiSwitchCore {
     const newProfile: ApiProfile = {
       ...profile,
       id: "prof_" + Math.random().toString(36).substring(2, 11),
+      models: profile.models || (profile.model ? [profile.model] : []),
     };
     this.profiles.push(newProfile);
     await this.save();
@@ -224,6 +233,7 @@ class ApiSwitchCore {
         baseUrl: String(prof.baseUrl || ""),
         apiKey: String(prof.apiKey || ""),
         model: String(prof.model),
+        models: Array.isArray(prof.models) ? prof.models.map(String) : (prof.model ? [String(prof.model)] : []),
         requestTimeoutSeconds: Number(prof.requestTimeoutSeconds ?? 30),
         temperature: Number(prof.temperature ?? 0.7),
         maxTokens: Number(prof.maxTokens ?? 4096),

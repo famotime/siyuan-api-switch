@@ -135,6 +135,7 @@ export interface SharedConfig {
   baseUrl: string;        // API 基础 URL
   apiKey: string;         // API 密钥
   model: string;          // 模型名称
+  models?: string[];      // 候选模型列表
   requestTimeoutSeconds?: number; // 请求超时时间（秒）
   temperature?: number;   // 采样温度
   maxTokens?: number;     // 最大 Token 数

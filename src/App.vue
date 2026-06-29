@@ -177,15 +177,48 @@
 
                 <div class="form-row">
                   <div class="form-group col-8">
-                    <label>模型名称 (Model) *</label>
-                    <input type="text" class="b3-text-field" v-model="editingProfile.model" placeholder="gpt-4o-mini" />
+                    <label>当前启用模型 (Active Model) *</label>
+                    <select class="b3-select" v-model="editingProfile.model">
+                      <option v-for="m in editingProfile.models || []" :key="m" :value="m">{{ m }}</option>
+                    </select>
                   </div>
                   <div class="form-group col-4">
-                    <label>推荐预设模型</label>
+                    <label>添加推荐模型</label>
                     <select class="b3-select" @change="selectPresetModel($event)">
-                      <option value="">-- 选择预设模型 --</option>
+                      <option value="">-- 选择并添加 --</option>
                       <option v-for="m in presetModels[editingProfile.provider] || []" :key="m" :value="m">{{ m }}</option>
                     </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>候选模型池 (Model Pool)</label>
+                  <div class="model-pool-container">
+                    <div class="model-tags" v-if="editingProfile.models && editingProfile.models.length > 0">
+                      <span 
+                        v-for="m in editingProfile.models" 
+                        :key="m" 
+                        :class="['model-tag', { active: editingProfile.model === m }]"
+                        @click="editingProfile.model = m"
+                        title="点击设为当前启用模型"
+                      >
+                        {{ m }}
+                        <span class="remove-tag" @click.stop="removeModel(m)" title="从池中移除">×</span>
+                      </span>
+                    </div>
+                    <div class="model-tags-empty" v-else>
+                      候选模型池为空，请在下方输入或选择推荐模型进行添加。
+                    </div>
+                    <div class="add-model-input-group">
+                      <input 
+                        type="text" 
+                        class="b3-text-field mini-input" 
+                        v-model="newModelInput" 
+                        placeholder="输入新模型名称，按回车添加" 
+                        @keyup.enter="addCustomModel"
+                      />
+                      <button class="b3-button b3-button--primary mini-btn" @click="addCustomModel" type="button">添加</button>
+                    </div>
                   </div>
                 </div>
 
@@ -341,6 +374,7 @@ const registeredPlugins = ref<RegisteredPluginInfo[]>([])
 
 const activePlugin = ref<RegisteredPluginInfo | null>(null)
 const editingProfile = ref<ApiProfile | null>(null)
+const newModelInput = ref("")
 const isNewProfile = ref(false)
 
 // 日志调试开关及工具函数
@@ -666,10 +700,15 @@ const selectProfile = (id: string) => {
     activeView.value = 'profile'
     showApiKey.value = false
     showAdvanced.value = false // 切换Profile时收起高级
+    newModelInput.value = "" // 重置输入框
 
     const profile = profiles.value.find(p => p.id === id)
     if (profile) {
       editingProfile.value = { ...profile }
+      // 向后兼容处理
+      if (!editingProfile.value.models || !Array.isArray(editingProfile.value.models)) {
+        editingProfile.value.models = editingProfile.value.model ? [editingProfile.value.model] : []
+      }
       recordProfileSnapshot(editingProfile.value)
     }
   }
@@ -694,19 +733,25 @@ const createNewProfile = () => {
     activeView.value = 'profile'
     showApiKey.value = false
     showAdvanced.value = false // 新建时默认收起高级
+    newModelInput.value = "" // 重置输入框
+
+    const defaultProvider = "deepseek"
+    const defaults = providerDefaults[defaultProvider]
+    const defaultModels = presetModels[defaultProvider] ? [...presetModels[defaultProvider]] : [defaults.model]
 
     editingProfile.value = {
       id: "",
       name: "新配置",
-      provider: "deepseek",
-      baseUrl: providerDefaults.deepseek.baseUrl,
+      provider: defaultProvider,
+      baseUrl: defaults.baseUrl,
       apiKey: "",
-      model: providerDefaults.deepseek.model,
+      model: defaults.model,
+      models: defaultModels,
       requestTimeoutSeconds: 60,
       temperature: 0.7,
       maxTokens: 4096,
       memo: "",
-      providerUrl: providerDefaults.deepseek.providerUrl
+      providerUrl: defaults.providerUrl
     }
     recordProfileSnapshot(editingProfile.value)
   }
@@ -722,13 +767,54 @@ const onProviderChange = () => {
     if (!editingProfile.value.baseUrl) editingProfile.value.baseUrl = defaults.baseUrl
     if (!editingProfile.value.model) editingProfile.value.model = defaults.model
     if (!editingProfile.value.providerUrl) editingProfile.value.providerUrl = defaults.providerUrl
+    
+    // 初始化/覆盖 models 为新服务商的预设模型
+    const defaultModels = presetModels[prov] ? [...presetModels[prov]] : [defaults.model]
+    editingProfile.value.models = defaultModels
+    
+    // 如果当前的 model 字段不在新的 models 列表中，默认把 model 设为新列表的第一个
+    if (!defaultModels.includes(editingProfile.value.model)) {
+      editingProfile.value.model = defaultModels[0] || defaults.model
+    }
   }
 }
 
 const selectPresetModel = (e: Event) => {
-  const val = (e.target as HTMLSelectElement).value
+  const selectEl = e.target as HTMLSelectElement
+  const val = selectEl.value
   if (val && editingProfile.value) {
+    if (!editingProfile.value.models) {
+      editingProfile.value.models = []
+    }
+    if (!editingProfile.value.models.includes(val)) {
+      editingProfile.value.models.push(val)
+    }
     editingProfile.value.model = val
+  }
+  // 恢复选择框默认选项，允许重复选中同一项添加
+  selectEl.value = ""
+}
+
+const addCustomModel = () => {
+  const modelName = newModelInput.value.trim()
+  if (!modelName) return
+  if (!editingProfile.value) return
+  if (!editingProfile.value.models) {
+    editingProfile.value.models = []
+  }
+  if (!editingProfile.value.models.includes(modelName)) {
+    editingProfile.value.models.push(modelName)
+  }
+  editingProfile.value.model = modelName
+  newModelInput.value = ""
+}
+
+const removeModel = (modelName: string) => {
+  if (!editingProfile.value || !editingProfile.value.models) return
+  editingProfile.value.models = editingProfile.value.models.filter(m => m !== modelName)
+  // 如果被删除的是当前启用的模型，自动把 model 设为余下的第一个模型，或者空字符串
+  if (editingProfile.value.model === modelName) {
+    editingProfile.value.model = editingProfile.value.models[0] || ""
   }
 }
 
@@ -1716,6 +1802,100 @@ const onBindingChange = async (e: Event) => {
     align-self: flex-start;
     padding: 6px 14px;
     font-size: 12px;
+  }
+}
+
+.model-pool-container {
+  border: 1px dashed var(--b3-border-color);
+  padding: 12px;
+  border-radius: 8px;
+  background-color: var(--b3-theme-background-hover);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.model-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 28px;
+  align-items: center;
+}
+
+.model-tags-empty {
+  font-size: 11px;
+  color: var(--b3-theme-on-surface-mute, #888);
+  padding: 6px 0;
+}
+
+.model-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  background-color: var(--b3-theme-surface);
+  border: 1px solid var(--b3-border-color);
+  color: var(--b3-theme-on-surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-family: monospace;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    border-color: var(--b3-theme-primary);
+  }
+
+  &.active {
+    background-color: var(--b3-theme-primary-light, rgba(74, 144, 226, 0.15));
+    border-color: var(--b3-theme-primary);
+    color: var(--b3-theme-primary);
+    font-weight: 600;
+    box-shadow: 0 0 0 1px var(--b3-theme-primary);
+  }
+
+  .remove-tag {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--b3-theme-on-surface-mute, #888);
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s, color 0.2s;
+
+    &:hover {
+      background-color: var(--b3-theme-error, #f44336);
+      color: #fff;
+    }
+  }
+}
+
+.add-model-input-group {
+  display: flex;
+  gap: 8px;
+
+  .mini-input {
+    flex: 1;
+    height: 28px;
+    font-size: 12px;
+    padding: 0 8px;
+  }
+
+  .mini-btn {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 </style>
