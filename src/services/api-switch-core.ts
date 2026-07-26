@@ -291,8 +291,102 @@ class ApiSwitchCore {
     if (!profile) return;
     
     try {
-      const currentOpenAi = (window as any).siyuan?.config?.ai?.openAI || {};
-      
+      // 1. 获取完整的思源 conf 配置，拿到全量 AI 节点
+      const confRes = await fetchSyncPost("/api/system/getConf", {});
+      const fullConf = confRes && confRes.code === 0 ? confRes.data : null;
+      let aiConfig = fullConf?.ai || (window as any).siyuan?.config?.ai || {};
+
+      // 深拷贝，避免对只读引用修改
+      aiConfig = JSON.parse(JSON.stringify(aiConfig));
+
+      // 2. 最新版 Multi-Provider 结构更新
+      if (typeof aiConfig === "object") {
+        if (!Array.isArray(aiConfig.providers)) {
+          aiConfig.providers = [];
+        }
+
+        const modelId = profile.model || "custom-model";
+        const providerId = `provider_${profile.provider || 'custom'}`;
+
+        // 查找匹配的 Provider
+        let targetProvider = aiConfig.providers.find(
+          (p: any) => p.id === providerId || p.displayName === profile.name || (profile.provider && p.protocol === profile.provider)
+        );
+
+        if (!targetProvider) {
+          if (aiConfig.providers.length > 0) {
+            targetProvider = aiConfig.providers[0];
+          } else {
+            targetProvider = {
+              id: providerId,
+              displayName: profile.name || "API Switch Custom",
+              enabled: true,
+              protocol: profile.provider || "openai",
+              models: []
+            };
+            aiConfig.providers.push(targetProvider);
+          }
+        }
+
+        // 更新 Provider 属性
+        targetProvider.enabled = true;
+        targetProvider.apiKey = profile.apiKey || "";
+        targetProvider.baseUrl = profile.baseUrl || "";
+        targetProvider.requestTimeout = profile.requestTimeoutSeconds ?? 30;
+        if (!targetProvider.protocol) {
+          targetProvider.protocol = profile.provider || "openai";
+        }
+
+        // 确保 models 列表中包含 modelId
+        if (!Array.isArray(targetProvider.models)) {
+          targetProvider.models = [];
+        }
+
+        let targetModel = targetProvider.models.find((m: any) => m.id === modelId || m.name === modelId);
+        if (!targetModel) {
+          targetModel = {
+            id: modelId,
+            name: modelId,
+            displayName: modelId,
+            enabled: true
+          };
+          targetProvider.models.push(targetModel);
+        } else {
+          targetModel.enabled = true;
+        }
+
+        // 如果 Profile 包含多个候选模型，也同步加入模型列表
+        if (Array.isArray(profile.models)) {
+          for (const mName of profile.models) {
+            if (mName && !targetProvider.models.some((m: any) => m.id === mName || m.name === mName)) {
+              targetProvider.models.push({
+                id: mName,
+                name: mName,
+                displayName: mName,
+                enabled: true
+              });
+            }
+          }
+        }
+
+        // 更新 Agent 与 Editing 的场景使用模型 ID 及相关参数
+        if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
+          aiConfig.agent = {};
+        }
+        aiConfig.agent.modelId = targetModel.id || modelId;
+        if (profile.temperature !== undefined) aiConfig.agent.temperature = profile.temperature;
+        if (profile.maxTokens !== undefined) aiConfig.agent.maxCompletionTokens = profile.maxTokens;
+
+        if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
+          aiConfig.editing = {};
+        }
+        aiConfig.editing.modelId = targetModel.id || modelId;
+        if (profile.temperature !== undefined) aiConfig.editing.temperature = profile.temperature;
+        if (profile.maxTokens !== undefined) aiConfig.editing.maxCompletionTokens = profile.maxTokens;
+      }
+
+      // 3. 旧版 openAI 结构兼容更新
+      const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
       const updatedOpenAi = {
         ...currentOpenAi,
         apiBaseURL: profile.baseUrl,
@@ -302,17 +396,23 @@ class ApiSwitchCore {
         apiTemperature: profile.temperature ?? 0.7,
         apiMaxTokens: profile.maxTokens ?? 4096,
       };
-      
-      // 调用思源接口修改设置
-      const res = await fetchSyncPost("/api/setting/setAI", {
-        openAI: updatedOpenAi
-      });
+      aiConfig.openAI = updatedOpenAi;
+
+      // 4. 调用思源接口修改设置（发送全量 ai 对象）
+      const res = await fetchSyncPost("/api/setting/setAI", aiConfig);
       
       if (res && res.code === 0) {
-        // 同步修改内存配置，方便前端立即响应
-        if ((window as any).siyuan?.config?.ai) {
-          (window as any).siyuan.config.ai.openAI = updatedOpenAi;
+        // 同步修改内存中的 AI 配置节点，绝不覆盖整套 window.siyuan.config 引用，避免损坏思源前端运行时 editor 等对象
+        if ((window as any).siyuan?.config) {
+          (window as any).siyuan.config.ai = aiConfig;
         }
+        // 重新异步校验拉取系统配置，并仅增量同步 ai 节点
+        fetchSyncPost("/api/system/getConf", {}).then((confData) => {
+          if (confData && confData.code === 0 && confData.data?.ai && (window as any).siyuan?.config) {
+            (window as any).siyuan.config.ai = confData.data.ai;
+          }
+        }).catch(() => {});
+
         console.log("[API Switch] Successfully synchronized to Siyuan system AI");
       } else {
         console.error("[API Switch] Failed to synchronize to Siyuan system AI", res);
@@ -388,17 +488,39 @@ class ApiSwitchCore {
     const siyuanBoundId = this.bindings["siyuan_builtin"] || "";
     let siyuanLocalConfig: any = undefined;
     try {
-      const openAI = (window as any).siyuan?.config?.ai?.openAI;
-      if (openAI && openAI.apiKey && openAI.apiKey.trim() !== "") {
-        siyuanLocalConfig = {
-          provider: "openai",
-          baseUrl: openAI.apiBaseURL || "",
-          apiKey: openAI.apiKey || "",
-          model: openAI.apiModel || "",
-          requestTimeoutSeconds: openAI.apiTimeout ?? 30,
-          temperature: openAI.apiTemperature ?? 0.7,
-          maxTokens: openAI.apiMaxTokens ?? 4096,
-        };
+      const ai = (window as any).siyuan?.config?.ai;
+      if (ai) {
+        // 优先尝试从新版 multi-provider 中解析
+        if (Array.isArray(ai.providers) && ai.providers.length > 0) {
+          let activeProvider = ai.providers.find((p: any) => p.enabled && p.apiKey);
+          if (!activeProvider) activeProvider = ai.providers[0];
+
+          if (activeProvider && activeProvider.apiKey) {
+            const activeModel = ai.agent?.modelId || (activeProvider.models?.[0]?.name || activeProvider.models?.[0]?.id || "");
+            siyuanLocalConfig = {
+              provider: activeProvider.protocol || "openai",
+              baseUrl: activeProvider.baseUrl || "",
+              apiKey: activeProvider.apiKey || "",
+              model: activeModel,
+              requestTimeoutSeconds: activeProvider.requestTimeout ?? 30,
+              temperature: ai.agent?.temperature ?? 0.7,
+              maxTokens: ai.agent?.maxCompletionTokens ?? 4096,
+            };
+          }
+        }
+        
+        // 若新版未解析出有效配置，退回从 openAI 字段解析
+        if (!siyuanLocalConfig && ai.openAI && ai.openAI.apiKey && ai.openAI.apiKey.trim() !== "") {
+          siyuanLocalConfig = {
+            provider: "openai",
+            baseUrl: ai.openAI.apiBaseURL || "",
+            apiKey: ai.openAI.apiKey || "",
+            model: ai.openAI.apiModel || "",
+            requestTimeoutSeconds: ai.openAI.apiTimeout ?? 30,
+            temperature: ai.openAI.apiTemperature ?? 0.7,
+            maxTokens: ai.openAI.apiMaxTokens ?? 4096,
+          };
+        }
       }
     } catch (e) {}
 
@@ -415,11 +537,27 @@ class ApiSwitchCore {
 
   // 从本地配置一键导入为 Profile 并自动绑定
   async importLocalConfigToProfile(pluginId: string) {
-    const reg = this.registrations.get(pluginId);
-    if (!reg || !reg.localConfig) return;
+    let lc: any = undefined;
+    let displayName = "";
 
-    const lc = reg.localConfig;
-    const profileName = `导入 - ${reg.displayName}`;
+    if (pluginId === "siyuan_builtin") {
+      const regPlugins = this.getRegisteredPlugins();
+      const siyuanPlug = regPlugins.find((p) => p.pluginId === "siyuan_builtin");
+      if (siyuanPlug && siyuanPlug.localConfig) {
+        lc = siyuanPlug.localConfig;
+        displayName = siyuanPlug.displayName;
+      }
+    } else {
+      const reg = this.registrations.get(pluginId);
+      if (reg && reg.localConfig) {
+        lc = reg.localConfig;
+        displayName = reg.displayName;
+      }
+    }
+
+    if (!lc) return;
+
+    const profileName = `导入 - ${displayName}`;
     
     const newProfile = await this.addProfile({
       name: profileName,
@@ -430,7 +568,7 @@ class ApiSwitchCore {
       requestTimeoutSeconds: lc.requestTimeoutSeconds ?? 60,
       temperature: lc.temperature ?? 0.7,
       maxTokens: lc.maxTokens ?? 4096,
-      memo: `从 ${reg.displayName} 插件本地一键导入的配置`,
+      memo: `从 ${displayName} 本地一键导入的配置`,
       providerUrl: "",
     });
 

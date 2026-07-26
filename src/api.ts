@@ -475,3 +475,12 @@ export async function version(): Promise<string> {
 export async function currentTime(): Promise<number> {
   return request("/api/system/currentTime", {});
 }
+
+export async function getConf(): Promise<any> {
+  return request("/api/system/getConf", {});
+}
+
+export async function setAISetting(ai: any): Promise<any> {
+  return request("/api/setting/setAI", ai);
+}
+
