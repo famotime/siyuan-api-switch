@@ -139,6 +139,13 @@ export interface SharedConfig {
   requestTimeoutSeconds?: number; // 请求超时时间（秒）
   temperature?: number;   // 采样温度
   maxTokens?: number;     // 最大 Token 数
+  // 思源笔记编辑器与智能体 API 参数全量合集（为空不下发）
+  maxHistoryMessages?: number;   // 编辑器：最大上下文数
+  maxToolCallRounds?: number;    // 智能体：最大工具调用轮数
+  sessionTimeout?: number;       // 智能体：会话超时时间(s)
+  streamIdleTimeout?: number;    // 智能体：流空闲超时时间(s)
+  confirmTimeout?: number;       // 智能体：确认超时时间(s)
+  maxRetries?: number;           // 智能体：最大重试次数
   memo?: string;          // 备注
   providerUrl?: string;   // 服务商官网链接
 }

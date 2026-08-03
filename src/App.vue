@@ -231,22 +231,52 @@
                 <div class="advanced-fields" v-show="showAdvanced">
                   <div class="form-row">
                     <div class="form-group col-4">
-                      <label>超时时间 (秒)</label>
-                      <input type="number" class="b3-text-field" v-model.number="editingProfile.requestTimeoutSeconds" min="1" max="600" />
+                      <label>请求超时 (秒)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.requestTimeoutSeconds" placeholder="留空保持默认 (30s)" min="1" max="600" />
                     </div>
                     <div class="form-group col-4">
                       <label>采样温度 (Temperature)</label>
-                      <input type="number" class="b3-text-field" v-model.number="editingProfile.temperature" step="0.1" min="0" max="2" />
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.temperature" placeholder="0~2.0, 留空保持默认" step="0.1" min="0" max="2" />
                     </div>
                     <div class="form-group col-4">
                       <label>单次 Max Tokens</label>
-                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxTokens" min="1" />
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxTokens" placeholder="0或留空表示不限" min="0" />
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group col-4">
+                      <label>编辑器最大上下文 (轮)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxHistoryMessages" placeholder="1~64轮, 留空保持默认" min="1" max="64" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>智能体最大工具调用 (轮)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxToolCallRounds" placeholder="0或留空表示不限" min="0" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>智能体会话超时 (秒)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.sessionTimeout" placeholder="0或留空表示不限" min="0" max="3600" />
+                    </div>
+                  </div>
+
+                  <div class="form-row">
+                    <div class="form-group col-4">
+                      <label>智能体流空闲超时 (秒)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.streamIdleTimeout" placeholder="120s, 留空保持默认" min="1" max="600" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>智能体确认超时 (秒)</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.confirmTimeout" placeholder="120s, 留空保持默认" min="1" max="600" />
+                    </div>
+                    <div class="form-group col-4">
+                      <label>智能体最大重试次数</label>
+                      <input type="number" class="b3-text-field" v-model.number="editingProfile.maxRetries" placeholder="0~10次, 留空保持默认" min="0" max="10" />
                     </div>
                   </div>
 
                   <div class="form-group">
                     <label>备注说明 (可选)</label>
-                    <textarea class="b3-text-field textarea-field" v-model="editingProfile.memo" placeholder="添加此 API 账号的备注信息，如过期时间或用途说明..."></textarea>
+                    <textarea class="b3-text-field textarea-field" v-model="editingProfile.memo" placeholder="添加此 API 账号的备注信息..."></textarea>
                   </div>
                 </div>
               </div>
@@ -278,14 +308,21 @@
                   </div>
                 </div>
 
-                <div v-if="!activePlugin.isBound && activePlugin.localConfig && activePlugin.localConfig.apiKey" class="local-config-import-card animate-fade-in" style="margin-bottom: 16px;">
+                <div v-if="!activePlugin.isBound && activePlugin.localConfig && (activePlugin.localConfig.baseUrl || activePlugin.localConfig.apiKey || activePlugin.localConfig.model)" class="local-config-import-card animate-fade-in" style="margin-bottom: 16px;">
                   <div class="import-card-title">
-                    💡 检测到该插件已有本地配置
+                    💡 检测到该插件已有本地配置与高级参数
                   </div>
-                  <div class="import-card-desc" style="margin-top: 4px;">
-                    服务商: <strong>{{ getProviderName(activePlugin.localConfig.provider) }}</strong> | 
-                    模型: <strong>{{ activePlugin.localConfig.model }}</strong> | 
-                    地址: <code>{{ activePlugin.localConfig.baseUrl }}</code>
+                  <div class="import-card-desc" style="margin-top: 6px; line-height: 1.6;">
+                    <div>基础参数：服务商 <strong>{{ getProviderName(activePlugin.localConfig.provider) }}</strong> | 模型 <strong>{{ activePlugin.localConfig.model || '未指定' }}</strong> | 地址 <code>{{ activePlugin.localConfig.baseUrl || '无' }}</code></div>
+                    <div style="margin-top: 4px; font-size: 12px; opacity: 0.9;">
+                      高级参数：超时 <strong>{{ activePlugin.localConfig.requestTimeoutSeconds ?? 30 }}s</strong> | 
+                      温度 <strong>{{ activePlugin.localConfig.temperature ?? 0.7 }}</strong> | 
+                      Max Tokens <strong>{{ activePlugin.localConfig.maxTokens ? activePlugin.localConfig.maxTokens : '不限(0)' }}</strong>
+                      <span v-if="(activePlugin.localConfig as any).maxHistoryMessages !== undefined"> | 上下文 <strong>{{ (activePlugin.localConfig as any).maxHistoryMessages }} 轮</strong></span>
+                      <span v-if="(activePlugin.localConfig as any).maxToolCallRounds !== undefined"> | 工具调用 <strong>{{ (activePlugin.localConfig as any).maxToolCallRounds }} 轮</strong></span>
+                      <span v-if="(activePlugin.localConfig as any).sessionTimeout !== undefined"> | 会话超时 <strong>{{ (activePlugin.localConfig as any).sessionTimeout }}s</strong></span>
+                      <span v-if="(activePlugin.localConfig as any).streamIdleTimeout !== undefined"> | 流空闲超时 <strong>{{ (activePlugin.localConfig as any).streamIdleTimeout }}s</strong></span>
+                    </div>
                   </div>
                   <button class="b3-button b3-button--primary import-action-btn" style="margin-top: 10px; padding: 4px 10px; font-size: 11px; height: auto;" @click="importLocalConfig(activePlugin.pluginId)">
                     📥 一键导入为 Profile 并接管
@@ -358,7 +395,7 @@
 <script setup lang="ts">
 import { usePlugin } from '@/main'
 import { onMounted, ref, watch } from 'vue'
-import { apiSwitchCore, ApiProfile, RegisteredPluginInfo } from "@/services/api-switch-core"
+import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings } from "@/services/api-switch-core"
 import { showMessage } from "siyuan"
 
 // 状态定义
@@ -547,18 +584,21 @@ const openProviderUrl = (url: string) => {
 const hasSiyuanBuiltInAi = ref(false)
 const siyuanBuiltInAiInfo = ref("")
 
-// 检测思源笔记内置的 AI 配置信息
+// 检测思源笔记内置的 AI 配置信息（分为编辑器与智能体两条路线）
 const checkSiyuanBuiltInAi = () => {
   try {
-    const openAI = (window as any).siyuan?.config?.ai?.openAI
-    if (openAI && openAI.apiKey && openAI.apiKey.trim() !== "") {
-      hasSiyuanBuiltInAi.value = true
-      const provider = openAI.apiProvider || "OpenAI"
-      const model = openAI.apiModel || "未指定模型"
-      siyuanBuiltInAiInfo.value = `${provider} (${model})`
-    } else {
-      hasSiyuanBuiltInAi.value = false
+    const ai = (window as any).siyuan?.config?.ai
+    if (ai) {
+      const extracted = extractSiyuanAiSettings(ai)
+      if (extracted.editing || extracted.agent) {
+        hasSiyuanBuiltInAi.value = true
+        const edModel = extracted.editing ? `${extracted.editing.provider} (${extracted.editing.model})` : "未配置"
+        const agModel = extracted.agent ? `${extracted.agent.provider} (${extracted.agent.model})` : "未配置"
+        siyuanBuiltInAiInfo.value = `编辑器: ${edModel} | 智能体: ${agModel}`
+        return
+      }
     }
+    hasSiyuanBuiltInAi.value = false
   } catch (err) {
     hasSiyuanBuiltInAi.value = false
   }
@@ -657,11 +697,24 @@ const refreshData = () => {
 }
 
 const importLocalConfig = async (pluginId: string) => {
-  showCustomConfirm("导入本地配置", "确定要将此插件的本地配置导入为全局 API Profile 并由 API 旋钮接管吗？", async () => {
+  showCustomConfirm("导入本地配置", "确定要将此插件的本地配置（含高级参数）导入为全局 API Profile 并由 API 旋钮接管吗？", async () => {
     await apiSwitchCore.importLocalConfigToProfile(pluginId)
     refreshData()
     showMessage("已成功导入并接管该插件", 3000, "info")
   })
+}
+
+const importSiyuanBuiltInAi = async () => {
+  showCustomConfirm(
+    "导入思源内置 AI 配置",
+    "将分别读取思源笔记「API-编辑器」与「API-智能体」的基础与高级参数，并导入创建两套 Profile，确定继续吗？",
+    async () => {
+      await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_editing")
+      await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_agent")
+      refreshData()
+      showMessage("已成功导入思源笔记编辑器与智能体配置（含高级参数）！", 3000, "info")
+    }
+  )
 }
 
 onMounted(() => {

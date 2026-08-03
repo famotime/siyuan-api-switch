@@ -9,9 +9,16 @@ export interface ApiProfile {
   apiKey: string;
   model: string;
   models?: string[];
-  requestTimeoutSeconds: number;
-  temperature: number;
-  maxTokens: number;
+  requestTimeoutSeconds?: number;
+  temperature?: number;
+  maxTokens?: number;
+  // 思源笔记编辑器与智能体 API 参数全量合集（标准扩展，为空不下发）
+  maxHistoryMessages?: number;
+  maxToolCallRounds?: number;
+  sessionTimeout?: number;
+  streamIdleTimeout?: number;
+  confirmTimeout?: number;
+  maxRetries?: number;
   memo?: string;
   providerUrl?: string;
 }
@@ -30,6 +37,121 @@ export interface RegisteredPluginInfo {
 }
 
 const STORAGE_KEY = "config.json";
+
+export interface SiyuanExtractedAiInfo {
+  provider: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  requestTimeoutSeconds?: number;
+  temperature?: number;
+  maxTokens?: number;
+  maxHistoryMessages?: number;
+  maxToolCallRounds?: number;
+  sessionTimeout?: number;
+  streamIdleTimeout?: number;
+  confirmTimeout?: number;
+  maxRetries?: number;
+}
+
+export function extractSiyuanAiSettings(aiConfig: any): {
+  editing: SiyuanExtractedAiInfo | null;
+  agent: SiyuanExtractedAiInfo | null;
+} {
+  if (!aiConfig || typeof aiConfig !== "object") {
+    return { editing: null, agent: null };
+  }
+
+  const providers = Array.isArray(aiConfig.providers) ? aiConfig.providers : [];
+
+  const getBaseUrl = (obj: any): string => {
+    if (!obj || typeof obj !== "object") return "";
+    return obj.baseURL || obj.baseUrl || obj.apiBaseURL || obj.apiBaseUrl || "";
+  };
+
+  const getApiKey = (obj: any): string => {
+    if (!obj || typeof obj !== "object") return "";
+    return obj.apiKey || obj.apikey || obj.api_key || "";
+  };
+
+  function resolveModel(modelId?: string) {
+    if (!modelId || providers.length === 0) return null;
+    for (const p of providers) {
+      if (!p || !p.enabled) continue;
+      if (Array.isArray(p.models)) {
+        for (const m of p.models) {
+          if (m && m.enabled && (m.id === modelId || m.displayName === modelId || m.name === modelId)) {
+            return { provider: p, model: m };
+          }
+        }
+      }
+    }
+    const fallbackProvider = providers.find((p: any) => p && p.enabled && getApiKey(p) !== "") || providers[0];
+    if (fallbackProvider) {
+      const fallbackModel = fallbackProvider.models?.find((m: any) => m && m.enabled) || fallbackProvider.models?.[0];
+      return { provider: fallbackProvider, model: fallbackModel };
+    }
+    return null;
+  }
+
+  // 1. 思源笔记 API - 编辑器 (Editing)
+  let editingConfig: SiyuanExtractedAiInfo | null = null;
+  const editingResolved = resolveModel(aiConfig.editing?.modelId);
+  if (editingResolved && editingResolved.provider) {
+    editingConfig = {
+      provider: editingResolved.provider.protocol || "openai",
+      baseUrl: getBaseUrl(editingResolved.provider),
+      apiKey: getApiKey(editingResolved.provider),
+      model: editingResolved.model?.name || editingResolved.model?.id || aiConfig.editing?.modelId || "",
+      requestTimeoutSeconds: editingResolved.provider.requestTimeout,
+      temperature: aiConfig.editing?.temperature,
+      maxTokens: aiConfig.editing?.maxCompletionTokens,
+      maxHistoryMessages: aiConfig.editing?.maxHistoryMessages,
+    };
+  } else if (aiConfig.openAI && (getApiKey(aiConfig.openAI) !== "" || getBaseUrl(aiConfig.openAI) !== "")) {
+    editingConfig = {
+      provider: "openai",
+      baseUrl: getBaseUrl(aiConfig.openAI),
+      apiKey: getApiKey(aiConfig.openAI),
+      model: aiConfig.openAI.apiModel || "",
+      requestTimeoutSeconds: aiConfig.openAI.apiTimeout,
+      temperature: aiConfig.openAI.apiTemperature,
+      maxTokens: aiConfig.openAI.apiMaxTokens,
+    };
+  }
+
+  // 2. 思源笔记 API - 智能体 (Agent)
+  let agentConfig: SiyuanExtractedAiInfo | null = null;
+  const agentResolved = resolveModel(aiConfig.agent?.modelId);
+  if (agentResolved && agentResolved.provider) {
+    agentConfig = {
+      provider: agentResolved.provider.protocol || "openai",
+      baseUrl: getBaseUrl(agentResolved.provider),
+      apiKey: getApiKey(agentResolved.provider),
+      model: agentResolved.model?.name || agentResolved.model?.id || aiConfig.agent?.modelId || "",
+      requestTimeoutSeconds: agentResolved.provider.requestTimeout,
+      temperature: aiConfig.agent?.temperature,
+      maxTokens: aiConfig.agent?.maxCompletionTokens,
+      maxToolCallRounds: aiConfig.agent?.maxToolCallRounds,
+      sessionTimeout: aiConfig.agent?.sessionTimeout,
+      streamIdleTimeout: aiConfig.agent?.streamIdleTimeout,
+      confirmTimeout: aiConfig.agent?.confirmTimeout,
+      maxRetries: aiConfig.agent?.maxRetries,
+    };
+  } else if (aiConfig.openAI && (getApiKey(aiConfig.openAI) !== "" || getBaseUrl(aiConfig.openAI) !== "")) {
+    agentConfig = {
+      provider: "openai",
+      baseUrl: getBaseUrl(aiConfig.openAI),
+      apiKey: getApiKey(aiConfig.openAI),
+      model: aiConfig.openAI.apiModel || "",
+      requestTimeoutSeconds: aiConfig.openAI.apiTimeout,
+      temperature: aiConfig.openAI.apiTemperature,
+      maxTokens: aiConfig.openAI.apiMaxTokens,
+    };
+  }
+
+  return { editing: editingConfig, agent: agentConfig };
+}
 
 class ApiSwitchCore {
   private plugin: Plugin | null = null;
@@ -187,7 +309,7 @@ class ApiSwitchCore {
     const profile = this.profiles.find((p) => p.id === profileId);
     if (!profile) return null;
 
-    return {
+    const conf: SharedConfig = {
       profileId: profile.id,
       profileName: profile.name,
       provider: profile.provider,
@@ -195,12 +317,21 @@ class ApiSwitchCore {
       apiKey: profile.apiKey,
       model: profile.model,
       models: profile.models || (profile.model ? [profile.model] : []),
-      requestTimeoutSeconds: profile.requestTimeoutSeconds,
-      temperature: profile.temperature,
-      maxTokens: profile.maxTokens,
-      memo: profile.memo,
-      providerUrl: profile.providerUrl,
     };
+
+    if (profile.requestTimeoutSeconds !== undefined && profile.requestTimeoutSeconds !== null) conf.requestTimeoutSeconds = profile.requestTimeoutSeconds;
+    if (profile.temperature !== undefined && profile.temperature !== null) conf.temperature = profile.temperature;
+    if (profile.maxTokens !== undefined && profile.maxTokens !== null) conf.maxTokens = profile.maxTokens;
+    if (profile.maxHistoryMessages !== undefined && profile.maxHistoryMessages !== null) conf.maxHistoryMessages = profile.maxHistoryMessages;
+    if (profile.maxToolCallRounds !== undefined && profile.maxToolCallRounds !== null) conf.maxToolCallRounds = profile.maxToolCallRounds;
+    if (profile.sessionTimeout !== undefined && profile.sessionTimeout !== null) conf.sessionTimeout = profile.sessionTimeout;
+    if (profile.streamIdleTimeout !== undefined && profile.streamIdleTimeout !== null) conf.streamIdleTimeout = profile.streamIdleTimeout;
+    if (profile.confirmTimeout !== undefined && profile.confirmTimeout !== null) conf.confirmTimeout = profile.confirmTimeout;
+    if (profile.maxRetries !== undefined && profile.maxRetries !== null) conf.maxRetries = profile.maxRetries;
+    if (profile.memo) conf.memo = profile.memo;
+    if (profile.providerUrl) conf.providerUrl = profile.providerUrl;
+
+    return conf;
   }
 
   // 管理 API Profiles
@@ -234,9 +365,15 @@ class ApiSwitchCore {
         apiKey: String(prof.apiKey || ""),
         model: String(prof.model),
         models: Array.isArray(prof.models) ? prof.models.map(String) : (prof.model ? [String(prof.model)] : []),
-        requestTimeoutSeconds: Number(prof.requestTimeoutSeconds ?? 30),
-        temperature: Number(prof.temperature ?? 0.7),
-        maxTokens: Number(prof.maxTokens ?? 4096),
+        requestTimeoutSeconds: prof.requestTimeoutSeconds !== undefined ? Number(prof.requestTimeoutSeconds) : undefined,
+        temperature: prof.temperature !== undefined ? Number(prof.temperature) : undefined,
+        maxTokens: prof.maxTokens !== undefined ? Number(prof.maxTokens) : undefined,
+        maxHistoryMessages: prof.maxHistoryMessages !== undefined ? Number(prof.maxHistoryMessages) : undefined,
+        maxToolCallRounds: prof.maxToolCallRounds !== undefined ? Number(prof.maxToolCallRounds) : undefined,
+        sessionTimeout: prof.sessionTimeout !== undefined ? Number(prof.sessionTimeout) : undefined,
+        streamIdleTimeout: prof.streamIdleTimeout !== undefined ? Number(prof.streamIdleTimeout) : undefined,
+        confirmTimeout: prof.confirmTimeout !== undefined ? Number(prof.confirmTimeout) : undefined,
+        maxRetries: prof.maxRetries !== undefined ? Number(prof.maxRetries) : undefined,
         memo: prof.memo ? String(prof.memo) : "",
         providerUrl: prof.providerUrl ? String(prof.providerUrl) : ""
       };
@@ -287,7 +424,7 @@ class ApiSwitchCore {
   }
 
   // 将最新的 Profile 同步给思源笔记内置的 AI 配置
-  private async updateSiyuanSystemAi(profile: ApiProfile | null) {
+  private async updateSiyuanSystemAi(profile: ApiProfile | null, targetScope: "editing" | "agent" | "all" = "all") {
     if (!profile) return;
     
     try {
@@ -331,8 +468,11 @@ class ApiSwitchCore {
         // 更新 Provider 属性
         targetProvider.enabled = true;
         targetProvider.apiKey = profile.apiKey || "";
+        targetProvider.baseURL = profile.baseUrl || "";
         targetProvider.baseUrl = profile.baseUrl || "";
-        targetProvider.requestTimeout = profile.requestTimeoutSeconds ?? 30;
+        if (profile.requestTimeoutSeconds !== undefined && profile.requestTimeoutSeconds !== null && !isNaN(profile.requestTimeoutSeconds)) {
+          targetProvider.requestTimeout = profile.requestTimeoutSeconds;
+        }
         if (!targetProvider.protocol) {
           targetProvider.protocol = profile.provider || "openai";
         }
@@ -369,20 +509,52 @@ class ApiSwitchCore {
           }
         }
 
-        // 更新 Agent 与 Editing 的场景使用模型 ID 及相关参数
-        if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
-          aiConfig.agent = {};
-        }
-        aiConfig.agent.modelId = targetModel.id || modelId;
-        if (profile.temperature !== undefined) aiConfig.agent.temperature = profile.temperature;
-        if (profile.maxTokens !== undefined) aiConfig.agent.maxCompletionTokens = profile.maxTokens;
+        const targetModelId = targetModel.id || modelId;
 
-        if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
-          aiConfig.editing = {};
+        // 根据 targetScope 分离更新“编辑器”与“智能体”配置（注：为空的参数不下发/不覆盖）
+        if (targetScope === "agent" || targetScope === "all") {
+          if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
+            aiConfig.agent = {};
+          }
+          aiConfig.agent.modelId = targetModelId;
+          if (profile.temperature !== undefined && profile.temperature !== null && !isNaN(profile.temperature)) {
+            aiConfig.agent.temperature = profile.temperature;
+          }
+          if (profile.maxTokens !== undefined && profile.maxTokens !== null && !isNaN(profile.maxTokens)) {
+            aiConfig.agent.maxCompletionTokens = profile.maxTokens;
+          }
+          if (profile.maxToolCallRounds !== undefined && profile.maxToolCallRounds !== null && !isNaN(profile.maxToolCallRounds)) {
+            aiConfig.agent.maxToolCallRounds = profile.maxToolCallRounds;
+          }
+          if (profile.sessionTimeout !== undefined && profile.sessionTimeout !== null && !isNaN(profile.sessionTimeout)) {
+            aiConfig.agent.sessionTimeout = profile.sessionTimeout;
+          }
+          if (profile.streamIdleTimeout !== undefined && profile.streamIdleTimeout !== null && !isNaN(profile.streamIdleTimeout)) {
+            aiConfig.agent.streamIdleTimeout = profile.streamIdleTimeout;
+          }
+          if (profile.confirmTimeout !== undefined && profile.confirmTimeout !== null && !isNaN(profile.confirmTimeout)) {
+            aiConfig.agent.confirmTimeout = profile.confirmTimeout;
+          }
+          if (profile.maxRetries !== undefined && profile.maxRetries !== null && !isNaN(profile.maxRetries)) {
+            aiConfig.agent.maxRetries = profile.maxRetries;
+          }
         }
-        aiConfig.editing.modelId = targetModel.id || modelId;
-        if (profile.temperature !== undefined) aiConfig.editing.temperature = profile.temperature;
-        if (profile.maxTokens !== undefined) aiConfig.editing.maxCompletionTokens = profile.maxTokens;
+
+        if (targetScope === "editing" || targetScope === "all") {
+          if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
+            aiConfig.editing = {};
+          }
+          aiConfig.editing.modelId = targetModelId;
+          if (profile.temperature !== undefined && profile.temperature !== null && !isNaN(profile.temperature)) {
+            aiConfig.editing.temperature = profile.temperature;
+          }
+          if (profile.maxTokens !== undefined && profile.maxTokens !== null && !isNaN(profile.maxTokens)) {
+            aiConfig.editing.maxCompletionTokens = profile.maxTokens;
+          }
+          if (profile.maxHistoryMessages !== undefined && profile.maxHistoryMessages !== null && !isNaN(profile.maxHistoryMessages)) {
+            aiConfig.editing.maxHistoryMessages = profile.maxHistoryMessages;
+          }
+        }
       }
 
       // 3. 旧版 openAI 结构兼容更新
@@ -413,7 +585,7 @@ class ApiSwitchCore {
           }
         }).catch(() => {});
 
-        console.log("[API Switch] Successfully synchronized to Siyuan system AI");
+        console.log(`[API Switch] Successfully synchronized to Siyuan system AI (scope: ${targetScope})`);
       } else {
         console.error("[API Switch] Failed to synchronize to Siyuan system AI", res);
       }
@@ -433,9 +605,13 @@ class ApiSwitchCore {
       this.notifyPluginUpdate(pluginId, config);
       
       // 如果是思源内置AI，则写回思源配置
-      if (pluginId === "siyuan_builtin") {
-        const profile = this.profiles.find(p => p.id === profileId) || null;
-        await this.updateSiyuanSystemAi(profile);
+      const profile = this.profiles.find(p => p.id === profileId) || null;
+      if (pluginId === "siyuan_builtin_editing") {
+        await this.updateSiyuanSystemAi(profile, "editing");
+      } else if (pluginId === "siyuan_builtin_agent") {
+        await this.updateSiyuanSystemAi(profile, "agent");
+      } else if (pluginId === "siyuan_builtin") {
+        await this.updateSiyuanSystemAi(profile, "all");
       }
     }
     await this.save();
@@ -448,9 +624,13 @@ class ApiSwitchCore {
         this.notifyPluginUpdate(pluginId, config);
         
         // 如果思源内置AI绑定了该Profile，则同步更新
-        if (pluginId === "siyuan_builtin") {
-          const profile = this.profiles.find(p => p.id === profileId) || null;
-          this.updateSiyuanSystemAi(profile);
+        const profile = this.profiles.find(p => p.id === profileId) || null;
+        if (pluginId === "siyuan_builtin_editing") {
+          this.updateSiyuanSystemAi(profile, "editing");
+        } else if (pluginId === "siyuan_builtin_agent") {
+          this.updateSiyuanSystemAi(profile, "agent");
+        } else if (pluginId === "siyuan_builtin") {
+          this.updateSiyuanSystemAi(profile, "all");
         }
       }
     }
@@ -484,52 +664,33 @@ class ApiSwitchCore {
       });
     }
 
-    // 内置一个思源设置的虚拟“子插件”，允许对其进行接管
-    const siyuanBoundId = this.bindings["siyuan_builtin"] || "";
-    let siyuanLocalConfig: any = undefined;
+    // 提取思源笔记系统内置 AI 的“编辑器”和“智能体”两条路线
+    let extracted = { editing: null as SiyuanExtractedAiInfo | null, agent: null as SiyuanExtractedAiInfo | null };
     try {
       const ai = (window as any).siyuan?.config?.ai;
       if (ai) {
-        // 优先尝试从新版 multi-provider 中解析
-        if (Array.isArray(ai.providers) && ai.providers.length > 0) {
-          let activeProvider = ai.providers.find((p: any) => p.enabled && p.apiKey);
-          if (!activeProvider) activeProvider = ai.providers[0];
-
-          if (activeProvider && activeProvider.apiKey) {
-            const activeModel = ai.agent?.modelId || (activeProvider.models?.[0]?.name || activeProvider.models?.[0]?.id || "");
-            siyuanLocalConfig = {
-              provider: activeProvider.protocol || "openai",
-              baseUrl: activeProvider.baseUrl || "",
-              apiKey: activeProvider.apiKey || "",
-              model: activeModel,
-              requestTimeoutSeconds: activeProvider.requestTimeout ?? 30,
-              temperature: ai.agent?.temperature ?? 0.7,
-              maxTokens: ai.agent?.maxCompletionTokens ?? 4096,
-            };
-          }
-        }
-        
-        // 若新版未解析出有效配置，退回从 openAI 字段解析
-        if (!siyuanLocalConfig && ai.openAI && ai.openAI.apiKey && ai.openAI.apiKey.trim() !== "") {
-          siyuanLocalConfig = {
-            provider: "openai",
-            baseUrl: ai.openAI.apiBaseURL || "",
-            apiKey: ai.openAI.apiKey || "",
-            model: ai.openAI.apiModel || "",
-            requestTimeoutSeconds: ai.openAI.apiTimeout ?? 30,
-            temperature: ai.openAI.apiTemperature ?? 0.7,
-            maxTokens: ai.openAI.apiMaxTokens ?? 4096,
-          };
-        }
+        extracted = extractSiyuanAiSettings(ai);
       }
     } catch (e) {}
 
+    // 1. 思源笔记 API - 编辑器
+    const editingBoundId = this.bindings["siyuan_builtin_editing"] || "";
     list.push({
-      pluginId: "siyuan_builtin",
-      displayName: "思源笔记内置 AI",
-      isBound: Boolean(siyuanBoundId),
-      boundProfileId: siyuanBoundId,
-      localConfig: siyuanLocalConfig
+      pluginId: "siyuan_builtin_editing",
+      displayName: "思源笔记 API-编辑器",
+      isBound: Boolean(editingBoundId),
+      boundProfileId: editingBoundId,
+      localConfig: extracted.editing || undefined
+    });
+
+    // 2. 思源笔记 API - 智能体
+    const agentBoundId = this.bindings["siyuan_builtin_agent"] || "";
+    list.push({
+      pluginId: "siyuan_builtin_agent",
+      displayName: "思源笔记 API-智能体",
+      isBound: Boolean(agentBoundId),
+      boundProfileId: agentBoundId,
+      localConfig: extracted.agent || undefined
     });
 
     return list;
@@ -540,13 +701,11 @@ class ApiSwitchCore {
     let lc: any = undefined;
     let displayName = "";
 
-    if (pluginId === "siyuan_builtin") {
-      const regPlugins = this.getRegisteredPlugins();
-      const siyuanPlug = regPlugins.find((p) => p.pluginId === "siyuan_builtin");
-      if (siyuanPlug && siyuanPlug.localConfig) {
-        lc = siyuanPlug.localConfig;
-        displayName = siyuanPlug.displayName;
-      }
+    const regPlugins = this.getRegisteredPlugins();
+    const targetPlug = regPlugins.find((p) => p.pluginId === pluginId);
+    if (targetPlug && targetPlug.localConfig) {
+      lc = targetPlug.localConfig;
+      displayName = targetPlug.displayName;
     } else {
       const reg = this.registrations.get(pluginId);
       if (reg && reg.localConfig) {
@@ -558,16 +717,23 @@ class ApiSwitchCore {
     if (!lc) return;
 
     const profileName = `导入 - ${displayName}`;
-    
+
     const newProfile = await this.addProfile({
       name: profileName,
       provider: lc.provider || "custom",
       baseUrl: lc.baseUrl || "",
       apiKey: lc.apiKey || "",
       model: lc.model || "",
-      requestTimeoutSeconds: lc.requestTimeoutSeconds ?? 60,
-      temperature: lc.temperature ?? 0.7,
-      maxTokens: lc.maxTokens ?? 4096,
+      models: lc.models || (lc.model ? [lc.model] : []),
+      requestTimeoutSeconds: lc.requestTimeoutSeconds,
+      temperature: lc.temperature,
+      maxTokens: lc.maxTokens,
+      maxHistoryMessages: lc.maxHistoryMessages,
+      maxToolCallRounds: lc.maxToolCallRounds,
+      sessionTimeout: lc.sessionTimeout,
+      streamIdleTimeout: lc.streamIdleTimeout,
+      confirmTimeout: lc.confirmTimeout,
+      maxRetries: lc.maxRetries,
       memo: `从 ${displayName} 本地一键导入的配置`,
       providerUrl: "",
     });
@@ -580,17 +746,21 @@ class ApiSwitchCore {
   async applyProfileToAllPlugins(profileId: string) {
     if (!profileId) return;
     
-    // 获取全部待绑定插件，包括已注册的第三方子插件和虚拟的“思源内置AI”
-    const allPluginIds = [...this.registrations.keys(), "siyuan_builtin"];
+    // 获取全部待绑定插件，包括已注册的第三方子插件和思源内置的编辑器与智能体 API
+    const allPluginIds = [...this.registrations.keys(), "siyuan_builtin_editing", "siyuan_builtin_agent"];
     
     for (const pluginId of allPluginIds) {
       this.bindings[pluginId] = profileId;
       const config = this.getBoundSharedConfig(pluginId);
       this.notifyPluginUpdate(pluginId, config);
       
-      if (pluginId === "siyuan_builtin") {
-        const profile = this.profiles.find(p => p.id === profileId) || null;
-        await this.updateSiyuanSystemAi(profile);
+      const profile = this.profiles.find(p => p.id === profileId) || null;
+      if (pluginId === "siyuan_builtin_editing") {
+        await this.updateSiyuanSystemAi(profile, "editing");
+      } else if (pluginId === "siyuan_builtin_agent") {
+        await this.updateSiyuanSystemAi(profile, "agent");
+      } else if (pluginId === "siyuan_builtin") {
+        await this.updateSiyuanSystemAi(profile, "all");
       }
     }
     
@@ -599,3 +769,4 @@ class ApiSwitchCore {
 }
 
 export const apiSwitchCore = new ApiSwitchCore();
+
