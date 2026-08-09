@@ -692,13 +692,13 @@ const handleFileImport = (e: Event) => {
             refreshData()
             showMessage(`成功导入配置：新增 ${added} 个，更新 ${updated} 个`, 3000, "info")
           } catch (err: any) {
-            console.error("导入 API 配置失败", err)
+            logDebug("导入 API 配置失败", err)
             showMessage(`导入失败: ${err.message || err}`, 5000, "error")
           }
         }
       )
     } catch (err: any) {
-      console.error("解析导入的 JSON 文件失败", err)
+      logDebug("解析导入的 JSON 文件失败", err)
       showMessage(`解析文件失败: ${err.message || err}`, 5000, "error")
     }
   }
@@ -721,7 +721,7 @@ const exportProfiles = () => {
     URL.revokeObjectURL(url)
     showMessage(`已成功导出 ${profiles.value.length} 个配置文件`, 3000, "info")
   } catch (err: any) {
-    console.error("导出配置文件失败", err)
+    logDebug("导出配置文件失败", err)
     showMessage(`导出失败: ${err.message || err}`, 5000, "error")
   }
 }

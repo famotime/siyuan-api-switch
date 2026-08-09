@@ -227,7 +227,7 @@ class ApiSwitchCore {
         this.bindings = {};
       }
     } catch (err) {
-      console.error("[API Switch] Failed to load config data", err);
+      this.logError("Failed to load config data", err);
       this.profiles = [];
       this.bindings = {};
     }
@@ -245,7 +245,7 @@ class ApiSwitchCore {
         this.onStateChange();
       }
     } catch (err) {
-      console.error("[API Switch] Failed to save config data", err);
+      this.logError("Failed to save config data", err);
     }
   }
 
@@ -264,7 +264,7 @@ class ApiSwitchCore {
     };
 
     window.siyuanApiSwitch = manager;
-    console.log("[API Switch] Mounted global window.siyuanApiSwitch");
+    this.log("Mounted global window.siyuanApiSwitch");
 
     // 触发就绪事件给先加载的子插件
     const event = new CustomEvent("siyuan-api-switch:ready", {
@@ -601,12 +601,12 @@ class ApiSwitchCore {
           }
         }).catch(() => {});
 
-        console.log(`[API Switch] Successfully synchronized to Siyuan system AI (scope: ${targetScope})`);
+        this.log(`Successfully synchronized to Siyuan system AI (scope: ${targetScope})`);
       } else {
-        console.error("[API Switch] Failed to synchronize to Siyuan system AI", res);
+        this.logError("Failed to synchronize to Siyuan system AI", res);
       }
     } catch (err) {
-      console.error("[API Switch] Error updating Siyuan system AI", err);
+      this.logError("Error updating Siyuan system AI", err);
     }
   }
 
