@@ -1,16 +1,30 @@
 <template>
   <div class="plugin-app-main" v-if="showDialog">
     <div class="dialog-overlay" @click.self="closeDialog">
-      <div class="switch-dialog animate-fade-in">
-        <!-- 顶栏 -->
-        <div class="dialog-header">
+      <div 
+        class="switch-dialog"
+        :class="{ 'is-dragging': isDraggingWindow, 'is-resizing': isResizingWindow }"
+        :style="{
+          width: `${dialogWidth}px`,
+          height: `${dialogHeight}px`,
+          transform: `translate(${dialogTranslateX}px, ${dialogTranslateY}px)`,
+        }"
+      >
+        <!-- 顶栏 (支持按住拖拽移动、双击最大化/还原) -->
+        <div class="dialog-header" @mousedown="onHeaderMouseDown" @dblclick="toggleMaximize">
           <div class="header-title">
             <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
             <span>API 旋钮 (siyuan-api-switch)</span>
           </div>
-          <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-          </button>
+          <div class="header-actions">
+            <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? '还原窗口' : '最大化窗口'" data-tooltip-position="bottom">
+              <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
+              <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+            </button>
+            <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
         </div>
 
         <!-- 主体区域 -->
@@ -38,7 +52,7 @@
                       data-tooltip="导入 API 配置"
                       data-tooltip-position="bottom"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="17 8 12 3 7 8" style="fill:none!important"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
                     </button>
                     <button 
                       class="title-action-btn" 
@@ -46,7 +60,7 @@
                       data-tooltip="导出 API 配置"
                       data-tooltip-position="bottom"
                     >
-                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="7 10 12 15 17 10" style="fill:none!important"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     </button>
                     <button 
                       class="title-action-btn" 
@@ -70,7 +84,7 @@
                       <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
                     </div>
                     <button class="profile-quick-apply" @click.stop="applyProfileToAll(prof)" data-tooltip="应用到所有接管项目" data-tooltip-position="left">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" style="fill:none!important"></polygon></svg>
                     </button>
                     <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
@@ -225,7 +239,7 @@
                 <!-- 折叠的高级设置面板 -->
                 <div class="advanced-divider" @click="showAdvanced = !showAdvanced">
                   <span>高级参数设置</span>
-                  <svg :class="['arrow-icon', { expanded: showAdvanced }]" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  <svg :class="['arrow-icon', { expanded: showAdvanced }]" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" style="fill:none!important"></polyline></svg>
                 </div>
 
                 <div class="advanced-fields" v-show="showAdvanced">
@@ -361,7 +375,7 @@
               <!-- 快捷导入思源配置卡片 -->
               <div v-if="hasSiyuanBuiltInAi" class="siyuan-import-card animate-fade-in">
                 <div class="card-icon">
-                  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="7 10 12 15 17 10" style="fill:none!important"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </div>
                 <div class="card-content">
                   <div class="card-title">检测到思源笔记已配置内置 AI</div>
@@ -375,7 +389,20 @@
           </div>
         </div>
 
-              </div>
+        <!-- 8 个方向的拖拽缩放手柄 -->
+        <div class="resize-handle resize-handle-n" @mousedown.prevent.stop="onResizeStart($event, 'n')"></div>
+        <div class="resize-handle resize-handle-s" @mousedown.prevent.stop="onResizeStart($event, 's')"></div>
+        <div class="resize-handle resize-handle-w" @mousedown.prevent.stop="onResizeStart($event, 'w')"></div>
+        <div class="resize-handle resize-handle-e" @mousedown.prevent.stop="onResizeStart($event, 'e')"></div>
+        <div class="resize-handle resize-handle-nw" @mousedown.prevent.stop="onResizeStart($event, 'nw')"></div>
+        <div class="resize-handle resize-handle-ne" @mousedown.prevent.stop="onResizeStart($event, 'ne')"></div>
+        <div class="resize-handle resize-handle-sw" @mousedown.prevent.stop="onResizeStart($event, 'sw')"></div>
+        <div class="resize-handle resize-handle-se" @mousedown.prevent.stop="onResizeStart($event, 'se')">
+          <svg class="resize-grip-icon" viewBox="0 0 10 10" width="10" height="10">
+            <path d="M8 2 L2 8 M9 5 L5 9 M9 8 L8 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none" />
+          </svg>
+        </div>
+      </div>
     </div>
 
     <!-- 自定义精美确认弹窗 (与 dialog-overlay 平级，移出 switch-dialog 以免被其 overflow: hidden 裁剪或事件冒泡阻挡) -->
@@ -394,9 +421,25 @@
 
 <script setup lang="ts">
 import { usePlugin } from '@/main'
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings } from "@/services/api-switch-core"
 import { showMessage } from "siyuan"
+
+// 弹窗尺寸与拖拽/缩放状态
+const STORAGE_KEY_SIZE = "sy_api_switch_dialog_size"
+const DEFAULT_WIDTH = 960
+const DEFAULT_HEIGHT = 640
+const MIN_WIDTH = 640
+const MIN_HEIGHT = 420
+
+const dialogWidth = ref(DEFAULT_WIDTH)
+const dialogHeight = ref(DEFAULT_HEIGHT)
+const dialogTranslateX = ref(0)
+const dialogTranslateY = ref(0)
+const isMaximized = ref(false)
+const isDraggingWindow = ref(false)
+const isResizingWindow = ref(false)
+const prevWindowState = ref<{ width: number; height: number; x: number; y: number } | null>(null)
 
 // 状态定义
 const showDialog = ref(false)
@@ -717,15 +760,228 @@ const importSiyuanBuiltInAi = async () => {
   )
 }
 
+// 加载本地持久化的弹窗尺寸
+const loadSavedDialogSize = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SIZE)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed.width === 'number' && typeof parsed.height === 'number') {
+        const maxW = Math.max(MIN_WIDTH, window.innerWidth - 32)
+        const maxH = Math.max(MIN_HEIGHT, window.innerHeight - 32)
+        dialogWidth.value = Math.min(Math.max(parsed.width, MIN_WIDTH), maxW)
+        dialogHeight.value = Math.min(Math.max(parsed.height, MIN_HEIGHT), maxH)
+        return
+      }
+    }
+  } catch (err) {
+    if (enableDebugLog.value) {
+      console.warn('Failed to load dialog size:', err)
+    }
+  }
+  dialogWidth.value = Math.min(DEFAULT_WIDTH, Math.max(MIN_WIDTH, window.innerWidth - 32))
+  dialogHeight.value = Math.min(DEFAULT_HEIGHT, Math.max(MIN_HEIGHT, window.innerHeight - 32))
+}
+
+// 保存弹窗尺寸至本地
+const saveDialogSize = () => {
+  if (isMaximized.value) return
+  try {
+    localStorage.setItem(STORAGE_KEY_SIZE, JSON.stringify({
+      width: Math.round(dialogWidth.value),
+      height: Math.round(dialogHeight.value),
+    }))
+  } catch (err) {
+    // ignore
+  }
+}
+
+// 打开弹窗
+const openDialog = () => {
+  loadSavedDialogSize()
+  dialogTranslateX.value = 0
+  dialogTranslateY.value = 0
+  isMaximized.value = false
+  showDialog.value = true
+}
+
+// 8 方向拖拽缩放
+const onResizeStart = (e: MouseEvent, direction: string) => {
+  if (isMaximized.value) {
+    isMaximized.value = false
+  }
+
+  isResizingWindow.value = true
+  const startX = e.clientX
+  const startY = e.clientY
+  const startW = dialogWidth.value
+  const startH = dialogHeight.value
+  const startTx = dialogTranslateX.value
+  const startTy = dialogTranslateY.value
+
+  const minW = MIN_WIDTH
+  const minH = MIN_HEIGHT
+  const maxW = Math.max(minW, window.innerWidth - 32)
+  const maxH = Math.max(minH, window.innerHeight - 32)
+
+  const originalUserSelect = document.body.style.userSelect
+  document.body.style.userSelect = 'none'
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const dx = moveEvent.clientX - startX
+    const dy = moveEvent.clientY - startY
+
+    // 水平方向
+    if (direction.includes('e')) {
+      const targetW = startW + dx
+      const newW = Math.min(maxW, Math.max(minW, targetW))
+      const deltaW = newW - startW
+      dialogWidth.value = newW
+      dialogTranslateX.value = startTx + deltaW / 2
+    } else if (direction.includes('w')) {
+      const targetW = startW - dx
+      const newW = Math.min(maxW, Math.max(minW, targetW))
+      const deltaW = newW - startW
+      dialogWidth.value = newW
+      dialogTranslateX.value = startTx - deltaW / 2
+    }
+
+    // 垂直方向
+    if (direction.includes('s')) {
+      const targetH = startH + dy
+      const newH = Math.min(maxH, Math.max(minH, targetH))
+      const deltaH = newH - startH
+      dialogHeight.value = newH
+      dialogTranslateY.value = startTy + deltaH / 2
+    } else if (direction.includes('n')) {
+      const targetH = startH - dy
+      const newH = Math.min(maxH, Math.max(minH, targetH))
+      const deltaH = newH - startH
+      dialogHeight.value = newH
+      dialogTranslateY.value = startTy - deltaH / 2
+    }
+  }
+
+  const onMouseUp = () => {
+    isResizingWindow.value = false
+    document.body.style.userSelect = originalUserSelect
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    saveDialogSize()
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+// 顶栏按住拖拽移动弹窗
+const onHeaderMouseDown = (e: MouseEvent) => {
+  const target = e.target as HTMLElement | null
+  if (target && target.closest('button, input, select, textarea, a, .header-actions')) {
+    return
+  }
+
+  if (isMaximized.value) {
+    return
+  }
+
+  isDraggingWindow.value = true
+  const startX = e.clientX
+  const startY = e.clientY
+  const startTx = dialogTranslateX.value
+  const startTy = dialogTranslateY.value
+
+  const originalUserSelect = document.body.style.userSelect
+  document.body.style.userSelect = 'none'
+
+  const maxTx = Math.max(0, (window.innerWidth - dialogWidth.value) / 2)
+  const maxTy = Math.max(0, (window.innerHeight - dialogHeight.value) / 2)
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const dx = moveEvent.clientX - startX
+    const dy = moveEvent.clientY - startY
+
+    const newTx = startTx + dx
+    const newTy = startTy + dy
+
+    dialogTranslateX.value = Math.min(maxTx, Math.max(-maxTx, newTx))
+    dialogTranslateY.value = Math.min(maxTy, Math.max(-maxTy, newTy))
+  }
+
+  const onMouseUp = () => {
+    isDraggingWindow.value = false
+    document.body.style.userSelect = originalUserSelect
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+// 最大化 / 还原切换
+const toggleMaximize = () => {
+  if (!isMaximized.value) {
+    prevWindowState.value = {
+      width: dialogWidth.value,
+      height: dialogHeight.value,
+      x: dialogTranslateX.value,
+      y: dialogTranslateY.value,
+    }
+    dialogWidth.value = Math.max(MIN_WIDTH, window.innerWidth - 32)
+    dialogHeight.value = Math.max(MIN_HEIGHT, window.innerHeight - 32)
+    dialogTranslateX.value = 0
+    dialogTranslateY.value = 0
+    isMaximized.value = true
+  } else {
+    if (prevWindowState.value) {
+      dialogWidth.value = prevWindowState.value.width
+      dialogHeight.value = prevWindowState.value.height
+      dialogTranslateX.value = prevWindowState.value.x
+      dialogTranslateY.value = prevWindowState.value.y
+    } else {
+      loadSavedDialogSize()
+      dialogTranslateX.value = 0
+      dialogTranslateY.value = 0
+    }
+    isMaximized.value = false
+  }
+}
+
+// 窗口尺寸自适应监听
+const handleWindowResize = () => {
+  if (isMaximized.value) {
+    dialogWidth.value = Math.max(MIN_WIDTH, window.innerWidth - 32)
+    dialogHeight.value = Math.max(MIN_HEIGHT, window.innerHeight - 32)
+    dialogTranslateX.value = 0
+    dialogTranslateY.value = 0
+  } else {
+    const maxW = Math.max(MIN_WIDTH, window.innerWidth - 32)
+    const maxH = Math.max(MIN_HEIGHT, window.innerHeight - 32)
+    if (dialogWidth.value > maxW) dialogWidth.value = maxW
+    if (dialogHeight.value > maxH) dialogHeight.value = maxH
+    const maxTx = Math.max(0, (window.innerWidth - dialogWidth.value) / 2)
+    const maxTy = Math.max(0, (window.innerHeight - dialogHeight.value) / 2)
+    dialogTranslateX.value = Math.min(maxTx, Math.max(-maxTx, dialogTranslateX.value))
+    dialogTranslateY.value = Math.min(maxTy, Math.max(-maxTy, dialogTranslateY.value))
+  }
+}
+
 onMounted(() => {
+  loadSavedDialogSize()
+  window.addEventListener('resize', handleWindowResize)
   apiSwitchCore.onStateChange = refreshData
   refreshData()
   
-  // 注册全局打开设置的方法
-  window._sy_plugin_sample = window._sy_plugin_sample || {}
-  window._sy_plugin_sample.openSetting = () => {
-    showDialog.value = true
+  // 注册插件专属打开设置的方法
+  window._sy_api_switch = window._sy_api_switch || {}
+  window._sy_api_switch.openSetting = () => {
+    openDialog()
   }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleWindowResize)
 })
 
 // 顶栏图标初始化
@@ -734,7 +990,7 @@ plugin.addTopBar({
   icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 13h5m3 3V8h3a2 2 0 0 1 2 2v1a2 2 0 0 1-2 2h-3m8-5v8M9 16v-5.5a2.5 2.5 0 0 0-5 0V16" style="fill:none!important"></path></svg>`,
   title: 'API 旋钮',
   callback: () => {
-    showDialog.value = true
+    openDialog()
   },
 })
 
@@ -1016,6 +1272,20 @@ const onBindingChange = async (e: Event) => {
   top: 0;
   left: 0;
   z-index: 1999; /* 保证在思源最顶层 */
+
+  // 严格重置所有线框图标，防止思源笔记或第三方主题强制将 SVG 元素设置 fill 填充
+  svg {
+    fill: none !important;
+
+    path,
+    rect,
+    circle,
+    polygon,
+    polyline,
+    line {
+      fill: none !important;
+    }
+  }
 }
 
 .dialog-overlay {
@@ -1031,6 +1301,12 @@ const onBindingChange = async (e: Event) => {
 .switch-dialog {
   width: 960px;
   height: 640px;
+  min-width: 640px;
+  min-height: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  position: relative;
+  box-sizing: border-box;
   background-color: var(--b3-theme-background);
   color: var(--b3-theme-on-background);
   border-radius: 12px;
@@ -1040,6 +1316,20 @@ const onBindingChange = async (e: Event) => {
   flex-direction: column;
   overflow: hidden;
   user-select: none;
+  animation: dialogFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  &.is-dragging, &.is-resizing {
+    transition: none !important;
+  }
+}
+
+@keyframes dialogFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .dialog-header {
@@ -1050,6 +1340,8 @@ const onBindingChange = async (e: Event) => {
   align-items: center;
   justify-content: space-between;
   background-color: var(--b3-theme-surface);
+  cursor: grab;
+  user-select: none;
 
   .header-title {
     display: flex;
@@ -1065,16 +1357,24 @@ const onBindingChange = async (e: Event) => {
     }
   }
 
-  .close-btn {
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: default;
+  }
+
+  .header-btn, .close-btn {
     background: none;
     border: none;
     cursor: pointer;
-    padding: 4px;
-    border-radius: 4px;
+    padding: 6px;
+    border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--b3-theme-on-surface);
+    transition: background-color 0.15s ease, color 0.15s ease;
 
     svg {
       width: 16px;
@@ -1083,6 +1383,98 @@ const onBindingChange = async (e: Event) => {
 
     &:hover {
       background-color: var(--b3-theme-background-hover);
+      color: var(--b3-theme-primary);
+    }
+  }
+
+  .close-btn:hover {
+    color: #e54d2e;
+    background-color: rgba(229, 77, 46, 0.12);
+  }
+}
+
+.switch-dialog.is-dragging .dialog-header {
+  cursor: grabbing;
+}
+
+/* 拖拽缩放手柄 */
+.resize-handle {
+  position: absolute;
+  z-index: 50;
+  touch-action: none;
+
+  &-n {
+    top: 0;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+  }
+  &-s {
+    bottom: 0;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: ns-resize;
+  }
+  &-w {
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 6px;
+    cursor: ew-resize;
+  }
+  &-e {
+    top: 8px;
+    bottom: 8px;
+    right: 0;
+    width: 6px;
+    cursor: ew-resize;
+  }
+  &-nw {
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    cursor: nwse-resize;
+  }
+  &-ne {
+    top: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+  }
+  &-sw {
+    bottom: 0;
+    left: 0;
+    width: 12px;
+    height: 12px;
+    cursor: nesw-resize;
+  }
+  &-se {
+    bottom: 0;
+    right: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 3px;
+    box-sizing: border-box;
+
+    .resize-grip-icon {
+      color: var(--b3-theme-on-surface);
+      opacity: 0.35;
+      transition: opacity 0.15s ease, color 0.15s ease;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    &:hover .resize-grip-icon {
+      opacity: 0.85;
+      color: var(--b3-theme-primary);
     }
   }
 }

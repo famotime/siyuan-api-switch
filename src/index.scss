@@ -1,0 +1,16 @@
+/* 确保 API 旋钮插件的所有 SVG 图标严格按线框显示，避免被思源笔记或第三方主题强制填充 */
+.siyuan-api-switch-app,
+.plugin-app-main {
+  svg {
+    fill: none !important;
+
+    path,
+    rect,
+    circle,
+    polygon,
+    polyline,
+    line {
+      fill: none !important;
+    }
+  }
+}

@@ -19,7 +19,7 @@ const {
   version,
 } = PluginInfo
 
-export default class PluginSample extends Plugin {
+export default class ApiSwitchPlugin extends Plugin {
   // Run as mobile
   public isMobile: boolean
   // Run in browser
@@ -65,6 +65,6 @@ export default class PluginSample extends Plugin {
   }
 
   openSetting() {
-    window._sy_plugin_sample.openSetting()
+    window._sy_api_switch?.openSetting?.()
   }
 }

@@ -122,7 +122,8 @@ interface Window {
     ws: any;
     languages: any;
   };
-  _sy_plugin_sample: {
+  _sy_api_switch?: {
+    openSetting?: () => void;
     [key: string]: any;
   };
   siyuanApiSwitch?: SiyuanApiSwitch;
