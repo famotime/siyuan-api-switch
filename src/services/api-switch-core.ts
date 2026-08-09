@@ -187,6 +187,26 @@ class ApiSwitchCore {
     this.plugin = plugin;
     await this.loadData();
     this.mountGlobal();
+    await this.syncSiyuanBuiltinBindings();
+  }
+
+  private async syncSiyuanBuiltinBindings() {
+    try {
+      if (this.bindings["siyuan_builtin_editing"]) {
+        const profile = this.profiles.find((p) => p.id === this.bindings["siyuan_builtin_editing"]) || null;
+        if (profile) {
+          await this.updateSiyuanSystemAi(profile, "editing");
+        }
+      }
+      if (this.bindings["siyuan_builtin_agent"]) {
+        const profile = this.profiles.find((p) => p.id === this.bindings["siyuan_builtin_agent"]) || null;
+        if (profile) {
+          await this.updateSiyuanSystemAi(profile, "agent");
+        }
+      }
+    } catch (err) {
+      this.logError("Failed to sync Siyuan builtin bindings on initialize", err);
+    }
   }
 
   private async loadData() {
@@ -447,22 +467,18 @@ class ApiSwitchCore {
 
         // 查找匹配的 Provider
         let targetProvider = aiConfig.providers.find(
-          (p: any) => p.id === providerId || p.displayName === profile.name || (profile.provider && p.protocol === profile.provider)
+          (p: any) => p.id === providerId || p.displayName === profile.name || (profile.provider && p.protocol === profile.provider && p.displayName === profile.name)
         );
 
         if (!targetProvider) {
-          if (aiConfig.providers.length > 0) {
-            targetProvider = aiConfig.providers[0];
-          } else {
-            targetProvider = {
-              id: providerId,
-              displayName: profile.name || "API Switch Custom",
-              enabled: true,
-              protocol: profile.provider || "openai",
-              models: []
-            };
-            aiConfig.providers.push(targetProvider);
-          }
+          targetProvider = {
+            id: providerId,
+            displayName: profile.name || "API Switch Custom",
+            enabled: true,
+            protocol: profile.provider || "openai",
+            models: []
+          };
+          aiConfig.providers.push(targetProvider);
         }
 
         // 更新 Provider 属性
