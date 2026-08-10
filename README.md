@@ -5,7 +5,7 @@
 ---
 
 ## 💡 为什么需要 API 旋钮？
-思源笔记生态中有大量优秀的 AI 辅助插件（如文献总结、知识图谱分析、Muse 写作助手等）。但每个插件都需要单独配置 AI 的 API 地址、API Key、模型名称等通用参数。
+思源笔记生态中有大量优秀的 AI 辅助插件，但每个插件都需要单独配置 AI 的 API 地址、API Key、模型名称等通用参数。
 - **痛点**：当您需要更换 API Key 或切换 AI 提供商（如从 DeepSeek 切换到 SiliconFlow）时，必须进入每个插件逐个修改，十分繁琐。
 - **解决方式**：**API 旋钮** 提供统一的 Profile 管理。您只需配置一次，就可以将指定的 Profile 绑定接管到其他插件，实现一键共享与无缝切换。
 
@@ -14,7 +14,6 @@
 ## ✨ 核心特性
 
 1. **集中式 Profile 管理**
-   - 完美适配深浅色主题的拟物化磨砂玻璃后台界面。
    - 内置并支持 DeepSeek、Google Gemini、SiliconFlow、OpenAI 及自定义（Custom）等主流服务商。
    - 自定义 Profile 包含：Base URL、API Key、Model 模型、超时时间、Temperature、Max Tokens、备注说明及服务商官网链接。
 2. **一键分发与接管**
@@ -31,7 +30,7 @@
 
 ## 🛠️ 第三方插件接入协议 (开发者指南)
 
-作为思源笔记插件开发者，您只需在子插件中加入约 20 行极简的同步逻辑，即可加入 API 旋钮的生态中。
+作为思源笔记插件开发者，您只需在子插件中加入约 20 行极简的同步逻辑，即可支持通过 API 旋钮 进行统一管理。
 
 ### 1. 初始化时主动注册并监听
 在子插件的 `onload` 方法中加入以下注册逻辑，并在回调中接收 API 配置的覆盖和还原：
@@ -105,8 +104,8 @@ onunload() {
 
 ## 📦 已适配接管的插件列表
 
-- [siyuan-doc-assist (文献助手)](https://github.com/famotime/siyuan-doc-assist)
-- [siyuan-network-lens (关系图谱分析)](https://github.com/famotime/siyuan-network-lens)
+- [siyuan-doc-assist (文档助手)](https://github.com/famotime/siyuan-doc-assist)
+- [siyuan-network-lens (脉络镜)](https://github.com/famotime/siyuan-network-lens)
 - [siyuan-muse (Muse 写作助手)](https://github.com/famotime/siyuan-muse)
 
 ---
