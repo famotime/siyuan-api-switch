@@ -462,18 +462,18 @@ const enableDebugLog = ref(localStorage.getItem("sy_api_switch_debug") === "true
 
 const saveLogSetting = () => {
   localStorage.setItem("sy_api_switch_debug", enableDebugLog.value ? "true" : "false")
-  showMessage(enableDebugLog.value ? "已开启日志调试模式" : "已关闭日志调试模式", 3000, "info")
+  /* removed toast */
 }
 
 const logDebug = (message: string, ...args: any[]) => {
   if (enableDebugLog.value) {
-    console.log(`[API Switch Debug] ${message}`, ...args)
+    // console.log(`[API Switch Debug] ${message}`, ...args)
     if (message.toLowerCase().includes("error") || message.toLowerCase().includes("fail") || args.some(a => a instanceof Error)) {
       const errorObj = args.find(a => a instanceof Error)
       const errText = errorObj ? `${message}: ${errorObj.message}\n${errorObj.stack || ''}` : `${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`
       showMessage(`调试日志: ${errText.substring(0, 300)}`, 10000, "error")
     } else {
-      showMessage(`调试日志: ${message}`, 3000, "info")
+      /* removed toast */
     }
   }
 }
@@ -679,7 +679,7 @@ const handleFileImport = (e: Event) => {
       }
 
       if (importedArray.length === 0) {
-        showMessage("未在文件中找到有效的 API 配置数据", 5000, "error")
+        showMessage(usePlugin().i18n.noValidApiConfig, 5000, "error")
         return
       }
 
@@ -690,16 +690,16 @@ const handleFileImport = (e: Event) => {
           try {
             const { added, updated } = await apiSwitchCore.importProfiles(importedArray)
             refreshData()
-            showMessage(`成功导入配置：新增 ${added} 个，更新 ${updated} 个`, 3000, "info")
+            /* removed toast */
           } catch (err: any) {
             logDebug("导入 API 配置失败", err)
-            showMessage(`导入失败: ${err.message || err}`, 5000, "error")
+            showMessage(usePlugin().i18n.importFailed.replace("{error}", err.message || err), 5000, "error")
           }
         }
       )
     } catch (err: any) {
       logDebug("解析导入的 JSON 文件失败", err)
-      showMessage(`解析文件失败: ${err.message || err}`, 5000, "error")
+      showMessage(usePlugin().i18n.parseFailed.replace("{error}", err.message || err), 5000, "error")
     }
   }
   reader.readAsText(file)
@@ -708,7 +708,7 @@ const handleFileImport = (e: Event) => {
 const exportProfiles = () => {
   try {
     if (profiles.value.length === 0) {
-      showMessage("当前没有可导出的 API 配置", 3000, "warning")
+      showMessage(usePlugin().i18n.noConfigToExport, 3000, "warning")
       return
     }
     const dataStr = JSON.stringify(profiles.value, null, 2)
@@ -719,10 +719,10 @@ const exportProfiles = () => {
     link.download = `siyuan-api-profiles-${new Date().toISOString().slice(0, 10)}.json`
     link.click()
     URL.revokeObjectURL(url)
-    showMessage(`已成功导出 ${profiles.value.length} 个配置文件`, 3000, "info")
+    /* removed toast */
   } catch (err: any) {
     logDebug("导出配置文件失败", err)
-    showMessage(`导出失败: ${err.message || err}`, 5000, "error")
+    showMessage(usePlugin().i18n.exportFailed.replace("{error}", err.message || err), 5000, "error")
   }
 }
 
@@ -743,7 +743,7 @@ const importLocalConfig = async (pluginId: string) => {
   showCustomConfirm("导入本地配置", "确定要将此插件的本地配置（含高级参数）导入为全局 API Profile 并由 API 旋钮接管吗？", async () => {
     await apiSwitchCore.importLocalConfigToProfile(pluginId)
     refreshData()
-    showMessage("已成功导入并接管该插件", 3000, "info")
+    /* removed toast */
   })
 }
 
@@ -755,7 +755,7 @@ const importSiyuanBuiltInAi = async () => {
       await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_editing")
       await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_agent")
       refreshData()
-      showMessage("已成功导入思源笔记编辑器与智能体配置（含高级参数）！", 3000, "info")
+      /* removed toast */
     }
   )
 }
@@ -1142,7 +1142,7 @@ const saveProfile = async () => {
   if (!editingProfile.value) return
   const ep = editingProfile.value
   if (!ep.name.trim() || !ep.baseUrl.trim() || !ep.apiKey.trim() || !ep.model.trim()) {
-    showMessage("请填写所有必填字段 (*)", 5000, "error")
+    showMessage(usePlugin().i18n.fillRequiredFields, 5000, "error")
     return
   }
 
@@ -1154,7 +1154,7 @@ const saveProfile = async () => {
     await apiSwitchCore.updateProfile(ep)
   }
   
-  showMessage("保存成功", 3000, "info")
+  /* removed toast */
   
   refreshData()
   
@@ -1187,7 +1187,7 @@ const deleteProfile = async (id: string) => {
       
       logDebug("Refreshing data after deletion")
       refreshData()
-      showMessage("配置已成功删除", 3000, "info")
+      /* removed toast */
       
       // 错开 tick 设为 null，防止销毁前触发表单空指针
       setTimeout(() => {
@@ -1223,7 +1223,7 @@ const quickDeleteProfile = (prof: ApiProfile) => {
       logDebug(`apiSwitchCore.deleteProfile successful for id: ${prof.id}`)
       
       refreshData()
-      showMessage(`配置「${prof.name}」已成功删除`, 3000, "info")
+      /* removed toast */
     } catch (err) {
       logDebug("Exception caught in quickDeleteProfile onConfirm", err)
     }
@@ -1240,7 +1240,7 @@ const applyProfileToAll = (prof: ApiProfile) => {
       logDebug(`apiSwitchCore.applyProfileToAllPlugins successful for id: ${prof.id}`)
       
       refreshData()
-      showMessage(`配置「${prof.name}」已成功应用到所有接管项目`, 3000, "info")
+      /* removed toast */
     } catch (err) {
       logDebug("Exception caught in applyProfileToAll onConfirm", err)
     }
@@ -1252,7 +1252,7 @@ const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
     await apiSwitchCore.bindPlugin(plug.pluginId, "")
     refreshData()
-    showMessage(`已解除对「${plug.displayName}」的接管`, 3000, "info")
+    /* removed toast */
   })
 }
 
@@ -1291,7 +1291,7 @@ const onBindingChange = async (e: Event) => {
 .dialog-overlay {
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: var(--b3-theme-background-light, rgba(0, 0, 0, 0.4));
   backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
@@ -1309,7 +1309,7 @@ const onBindingChange = async (e: Event) => {
   box-sizing: border-box;
   background-color: var(--b3-theme-background);
   color: var(--b3-theme-on-background);
-  border-radius: 12px;
+  border-radius: 4px;
   border: 1px solid var(--b3-border-color);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
   display: flex;
@@ -1389,7 +1389,7 @@ const onBindingChange = async (e: Event) => {
 
   .close-btn:hover {
     color: #e54d2e;
-    background-color: rgba(229, 77, 46, 0.12);
+    background-color: var(--b3-theme-error-light, rgba(229, 77, 46, 0.12));
   }
 }
 
@@ -1684,7 +1684,7 @@ const onBindingChange = async (e: Event) => {
     font-weight: bold;
 
     &.bound {
-      background-color: rgba(76, 175, 80, 0.12);
+      background-color: var(--b3-theme-success-light, rgba(76, 175, 80, 0.12));
       color: var(--b3-theme-success, #4caf50);
     }
 
@@ -1905,7 +1905,7 @@ const onBindingChange = async (e: Event) => {
 }
 
 .card-status-info {
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 16px;
   border: 1px solid transparent;
 
@@ -1946,7 +1946,7 @@ const onBindingChange = async (e: Event) => {
 .binding-tips {
   background-color: var(--b3-theme-surface);
   border: 1px solid var(--b3-border-color);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 16px;
 
   h3 {
@@ -1974,7 +1974,7 @@ const onBindingChange = async (e: Event) => {
 .local-config-import-card {
   background-color: rgba(63, 81, 181, 0.05);
   border: 1px dashed var(--b3-theme-primary);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -2153,7 +2153,7 @@ const onBindingChange = async (e: Event) => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: var(--b3-theme-background-light, rgba(0, 0, 0, 0.4));
     z-index: 2100;
   display: flex;
   justify-content: center;
@@ -2164,7 +2164,7 @@ const onBindingChange = async (e: Event) => {
   width: 360px;
   background-color: var(--b3-theme-background);
   color: var(--b3-theme-on-background);
-  border-radius: 12px;
+  border-radius: 4px;
   border: 1px solid var(--b3-border-color);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   padding: 20px;
@@ -2205,7 +2205,7 @@ const onBindingChange = async (e: Event) => {
   padding: 16px;
   background-color: var(--b3-theme-surface);
   border: 1px dashed var(--b3-border-color);
-  border-radius: 8px;
+  border-radius: 4px;
   max-width: 400px;
   display: flex;
   gap: 16px;
@@ -2253,7 +2253,7 @@ const onBindingChange = async (e: Event) => {
 .model-pool-container {
   border: 1px dashed var(--b3-border-color);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 4px;
   background-color: var(--b3-theme-background-hover);
   display: flex;
   flex-direction: column;
@@ -2279,7 +2279,7 @@ const onBindingChange = async (e: Event) => {
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 16px;
+  border-radius: 4px;
   font-size: 11px;
   background-color: var(--b3-theme-surface);
   border: 1px solid var(--b3-border-color);

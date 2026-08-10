@@ -1,3 +1,8 @@
 {
-  "addTopBarIcon": "PluginSampleViteVue"
+  "noValidApiConfig": "未在文件中找到有效的 API 配置数据",
+  "importFailed": "导入失败: {error}",
+  "parseFailed": "解析文件失败: {error}",
+  "noConfigToExport": "当前没有可导出的 API 配置",
+  "exportFailed": "导出失败: {error}",
+  "fillRequiredFields": "请填写所有必填字段 (*)"
 }

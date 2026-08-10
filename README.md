@@ -17,16 +17,13 @@
    - 完美适配深浅色主题的拟物化磨砂玻璃后台界面。
    - 内置并支持 DeepSeek、Google Gemini、SiliconFlow、OpenAI 及自定义（Custom）等主流服务商。
    - 自定义 Profile 包含：Base URL、API Key、Model 模型、超时时间、Temperature、Max Tokens、备注说明及服务商官网链接。
-
 2. **一键分发与接管**
    - 自动发现所有在全局注册的兼容子插件。
    - 提供直观的绑定面板，可将特定的配置 Profile 灵活绑定至具体的插件（例如：文献助手使用 DeepSeek，Muse 写作助手使用 OpenAI）。
    - 绑定后，子插件原生设置面板中被接管的输入框会自动置灰并展示接管提示，无需重启即可实时重定向 AI 请求。
-
 3. **零输入一键导入**
    - 当检测到已注册的插件拥有本地独立 API 配置时，绑定面板会显示「一键导入为 Profile 并接管」的选项。
    - 一键自动将本地配置迁移为旋钮全局 Profile 并实现绑定，免除手动复制粘贴秘钥的烦恼。
-
 4. **优雅的降级保护**
    - 采用全局解耦设计。若未安装 API 旋钮插件，子插件将完全无感地继续使用其自身独立的本地配置面板，没有任何副作用。
 
@@ -111,3 +108,10 @@ onunload() {
 - [siyuan-doc-assist (文献助手)](https://github.com/famotime/siyuan-doc-assist)
 - [siyuan-network-lens (关系图谱分析)](https://github.com/famotime/siyuan-network-lens)
 - [siyuan-muse (Muse 写作助手)](https://github.com/famotime/siyuan-muse)
+
+---
+
+## 📱 平台兼容性
+
+- **桌面端 / 浏览器端**：完全支持。
+- **移动端（Mobile）**：目前暂未对移动端界面进行深度适配。由于移动端屏幕尺寸受限，在手机端使用时可能出现弹窗尺寸超出屏幕、文本截断或按钮被遮挡的情况。建议在桌面端或浏览器端完成 API 配置和接管。

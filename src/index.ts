@@ -64,6 +64,10 @@ export default class ApiSwitchPlugin extends Plugin {
     destroy()
   }
 
+  uninstall() {
+    this.removeData("config.json");
+  }
+
   openSetting() {
     window._sy_api_switch?.openSetting?.()
   }

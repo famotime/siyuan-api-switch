@@ -1,3 +1,8 @@
 {
-  "addTopBarIcon": "PluginSampleViteVue"
+  "noValidApiConfig": "No valid API configuration data found in the file",
+  "importFailed": "Import failed: {error}",
+  "parseFailed": "Failed to parse file: {error}",
+  "noConfigToExport": "No API configuration available to export",
+  "exportFailed": "Export failed: {error}",
+  "fillRequiredFields": "Please fill in all required fields (*)"
 }
