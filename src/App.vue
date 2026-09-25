@@ -17,6 +17,12 @@
             <span>API 旋钮 (siyuan-api-switch)</span>
           </div>
           <div class="header-actions">
+            <button class="header-btn" @click="syncFromSiyuanAction" data-tooltip="从思源读取 AI 配置并同步" data-tooltip-position="bottom">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+            <button class="header-btn" @click="applyAllToSiyuanAction" data-tooltip="一键将全量配置写回思源笔记" data-tooltip-position="bottom">
+              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            </button>
             <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? '还原窗口' : '最大化窗口'" data-tooltip-position="bottom">
               <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
               <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
@@ -32,6 +38,46 @@
           <!-- 左侧导航栏 -->
           <div class="dialog-sidebar">
             <div class="sidebar-scroll-content">
+              <!-- 分区一：API 提供商 (Providers) -->
+              <div class="sidebar-section">
+                <div class="section-title">
+                  <div class="title-text">
+                    <span class="title-indicator"></span>
+                    <span>API 提供商 (Providers)</span>
+                  </div>
+                  <div class="title-actions">
+                    <button 
+                      class="title-action-btn" 
+                      @click="createNewProvider" 
+                      data-tooltip="添加新提供商" 
+                      data-tooltip-position="bottom"
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="profile-list">
+                  <div 
+                    v-for="prov in providers" 
+                    :key="prov.id" 
+                    :class="['profile-item', { active: activeView === 'provider' && selectedProviderId === prov.id }]"
+                    @click="selectProvider(prov.id)"
+                  >
+                    <div class="profile-item-meta">
+                      <div class="profile-item-name">{{ prov.displayName }}</div>
+                      <div class="profile-item-sub">{{ prov.protocol || 'openai' }} | {{ (prov.models && prov.models.length) || 0 }} 个模型</div>
+                    </div>
+                    <button class="profile-quick-delete" @click.stop="quickDeleteProvider(prov)" data-tooltip="删除提供商" data-tooltip-position="left">
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                    </button>
+                  </div>
+                  <div v-if="providers.length === 0" class="empty-list">
+                    暂无提供商，点击 + 或从思源同步
+                  </div>
+                </div>
+              </div>
+
+              <!-- 分区二：API 配置文件 (Profiles) -->
               <div class="sidebar-section">
                 <div class="section-title">
                   <div class="title-text">
@@ -140,12 +186,134 @@
 
           <!-- 右侧内容编辑区 -->
           <div class="dialog-content">
-            <!-- 场景一：编辑 Profile -->
-            <div v-if="activeView === 'profile' && editingProfile" class="form-container">
+            <!-- 场景一：编辑 API 提供商 (Provider) -->
+            <div v-if="activeView === 'provider' && editingProvider" class="form-container">
+              <div class="content-header">
+                <h2>{{ isNewProvider ? '新建 API 提供商' : '编辑 API 提供商' }}</h2>
+                <p class="subtitle" v-if="editingProvider.id">ID: {{ editingProvider.id }}</p>
+              </div>
+              <div class="form-scroll-wrapper">
+                <div class="form-row">
+                  <div class="form-group col-6">
+                    <label>提供商名称 *</label>
+                    <input type="text" class="b3-text-field" v-model="editingProvider.displayName" placeholder="如 DeepSeek 官方 / SiliconFlow" />
+                  </div>
+                  <div class="form-group col-6">
+                    <label>协议类型 *</label>
+                    <select class="b3-select" v-model="editingProvider.protocol">
+                      <option value="openai">OpenAI (主流兼容协议)</option>
+                      <option value="gemini">Google Gemini</option>
+                      <option value="anthropic">Anthropic</option>
+                      <option value="custom">Custom (自定义)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label>API 基础地址 (Base URL) *</label>
+                  <input type="text" class="b3-text-field" v-model="editingProvider.baseUrl" placeholder="https://api.example.com/v1" />
+                </div>
+
+                <div class="form-group">
+                  <label>API 密钥 (API Key) *</label>
+                  <div class="input-password-wrapper">
+                    <input 
+                      :type="showApiKey ? 'text' : 'password'" 
+                      class="b3-text-field" 
+                      v-model="editingProvider.apiKey" 
+                      placeholder="sk-..." 
+                    />
+                    <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'" data-tooltip-position="left">
+                      <svg v-if="showApiKey" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                      <svg v-else viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group col-6">
+                    <label>请求超时 (秒)</label>
+                    <input type="number" class="b3-text-field" v-model.number="editingProvider.requestTimeout" placeholder="默认 30" min="1" max="600" />
+                  </div>
+                  <div class="form-group col-6">
+                    <label>状态</label>
+                    <label class="form-checkbox-label" style="margin-top: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                      <input type="checkbox" v-model="editingProvider.enabled" />
+                      <span>启用此提供商</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- 模型列表 -->
+                <div class="form-group">
+                  <label>模型列表 (Models)</label>
+                  <div class="model-pool-container">
+                    <div class="model-tags" v-if="editingProvider.models && editingProvider.models.length > 0">
+                      <span 
+                        v-for="(m, mIdx) in editingProvider.models" 
+                        :key="m.id || m.name || mIdx" 
+                        class="model-tag"
+                      >
+                        {{ m.displayName || m.name }}
+                        <span class="remove-tag" @click.stop="removeModelFromProvider(mIdx)" title="删除模型">×</span>
+                      </span>
+                    </div>
+                    <div class="model-tags-empty" v-else>
+                      暂无模型，请在下方输入模型名添加。
+                    </div>
+                    <div class="add-model-input-group">
+                      <input 
+                        type="text" 
+                        class="b3-text-field mini-input" 
+                        v-model="newProviderModelInput" 
+                        placeholder="输入新模型名称 (如 deepseek-chat)，按回车添加" 
+                        @keyup.enter="addModelToEditingProvider"
+                      />
+                      <button class="b3-button b3-button--primary mini-btn" @click="addModelToEditingProvider" type="button">添加</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 自定义请求头 Headers -->
+                <div class="form-group">
+                  <label>自定义请求头 (Headers JSON，可选)</label>
+                  <textarea 
+                    class="b3-text-field textarea-field" 
+                    v-model="providerHeadersText" 
+                    placeholder='例如: { "HTTP-Referer": "https://siyuan-note.com", "X-Title": "MySiYuan" }'
+                    style="height: 60px; font-family: monospace; font-size: 12px;"
+                  ></textarea>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="b3-button b3-button--error" v-if="!isNewProvider" @click="deleteProvider(editingProvider.id)">删除</button>
+                <div class="flex-spacer"></div>
+                <button class="b3-button b3-button--cancel" @click="cancelProviderEdit">取消</button>
+                <button class="b3-button b3-button--primary" @click="saveProvider">保存提供商</button>
+              </div>
+            </div>
+
+            <!-- 场景二：编辑 Profile -->
+            <div v-else-if="activeView === 'profile' && editingProfile" class="form-container">
               <div class="content-header">
                 <h2>{{ isNewProfile ? '新建 API 配置' : '编辑 API 配置' }}</h2>
               </div>
               <div class="form-scroll-wrapper">
+                <!-- 关联 API 提供商选择 -->
+                <div class="form-group" style="background: rgba(63,81,181,0.06); padding: 10px 12px; border-radius: 6px; border: 1px dashed rgba(63,81,181,0.25); margin-bottom: 14px;">
+                  <label style="font-weight: 600; color: var(--b3-theme-primary); margin-bottom: 4px; display: block;">🔗 关联已配置的 API 提供商 (从提供商继承)</label>
+                  <select class="b3-select" v-model="editingProfile.providerId" @change="onProfileProviderSelect">
+                    <option value="">-- 无 (独立自定义配置，不继承提供商) --</option>
+                    <option v-for="prov in providers" :key="prov.id" :value="prov.id">
+                      {{ prov.displayName }} ({{ prov.protocol || 'openai' }}) - {{ (prov.models && prov.models.length) || 0 }} 个可用模型
+                    </option>
+                  </select>
+                  <div v-if="editingProfile.providerId" style="margin-top: 6px; font-size: 12px; opacity: 0.85; line-height: 1.5;">
+                    💡 已继承提供商的基础连接信息 (Base URL、API Key 与自定义 Headers)。当提供商更新时，此 Profile 自动联动生效。
+                  </div>
+                </div>
+
                 <div class="form-row">
                   <div class="form-group col-6">
                     <label>配置名称 *</label>
@@ -158,7 +326,8 @@
                         <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" style="fill:none!important"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                       </a>
                     </div>
-                    <select class="b3-select" v-model="editingProfile.provider" @change="onProviderChange">
+                    <input v-if="editingProfile.providerId" type="text" class="b3-text-field" :value="editingProfile.provider" disabled />
+                    <select v-else class="b3-select" v-model="editingProfile.provider" @change="onProviderChange">
                       <option value="deepseek">DeepSeek</option>
                       <option value="gemini">Google Gemini</option>
                       <option value="siliconflow">SiliconFlow (硅基流动)</option>
@@ -170,7 +339,7 @@
 
                 <div class="form-group">
                   <label>API 基础 URL (Base URL) *</label>
-                  <input type="text" class="b3-text-field" v-model="editingProfile.baseUrl" placeholder="https://api.example.com/v1" />
+                  <input type="text" class="b3-text-field" v-model="editingProfile.baseUrl" :disabled="Boolean(editingProfile.providerId)" placeholder="https://api.example.com/v1" />
                 </div>
 
                 <div class="form-group">
@@ -180,6 +349,7 @@
                       :type="showApiKey ? 'text' : 'password'" 
                       class="b3-text-field" 
                       v-model="editingProfile.apiKey" 
+                      :disabled="Boolean(editingProfile.providerId)"
                       placeholder="sk-..." 
                     />
                     <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'" data-tooltip-position="left">
@@ -193,10 +363,10 @@
                   <div class="form-group col-8">
                     <label>当前启用模型 (Active Model) *</label>
                     <select class="b3-select" v-model="editingProfile.model">
-                      <option v-for="m in editingProfile.models || []" :key="m" :value="m">{{ m }}</option>
+                      <option v-for="m in currentProfileAvailableModels" :key="m" :value="m">{{ m }}</option>
                     </select>
                   </div>
-                  <div class="form-group col-4">
+                  <div class="form-group col-4" v-if="!editingProfile.providerId">
                     <label>添加推荐模型</label>
                     <select class="b3-select" @change="selectPresetModel($event)">
                       <option value="">-- 选择并添加 --</option>
@@ -205,7 +375,7 @@
                   </div>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" v-if="!editingProfile.providerId">
                   <label>候选模型池 (Model Pool)</label>
                   <div class="model-pool-container">
                     <div class="model-tags" v-if="editingProfile.models && editingProfile.models.length > 0">
@@ -234,6 +404,14 @@
                       <button class="b3-button b3-button--primary mini-btn" @click="addCustomModel" type="button">添加</button>
                     </div>
                   </div>
+                </div>
+
+                <!-- 决策模型标识开关 -->
+                <div class="form-group" style="margin-top: 6px;">
+                  <label class="form-checkbox-label" style="display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer;">
+                    <input type="checkbox" v-model="editingProfile.isDecisionModel" />
+                    <span>设为决策模型 (Decision Model，专用于思源笔记 API-决策模型接管)</span>
+                  </label>
                 </div>
 
                 <!-- 折叠的高级设置面板 -->
@@ -421,8 +599,9 @@
 
 <script setup lang="ts">
 import { usePlugin } from '@/main'
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings } from "@/services/api-switch-core"
+import { ApiProvider, ApiProviderModel } from "@/types"
 import { showMessage } from "siyuan"
 
 // 弹窗尺寸与拖拽/缩放状态
@@ -445,35 +624,51 @@ const prevWindowState = ref<{ width: number; height: number; x: number; y: numbe
 const showDialog = ref(false)
 const showApiKey = ref(false)
 const showAdvanced = ref(false)
-const activeView = ref<'empty' | 'profile' | 'plugin'>('empty')
+const activeView = ref<'empty' | 'profile' | 'provider' | 'plugin'>('empty')
 const selectedProfileId = ref<string | null>(null)
+const selectedProviderId = ref<string | null>(null)
 const activePluginId = ref<string | null>(null)
 
+const providers = ref<ApiProvider[]>([])
 const profiles = ref<ApiProfile[]>([])
 const registeredPlugins = ref<RegisteredPluginInfo[]>([])
 
 const activePlugin = ref<RegisteredPluginInfo | null>(null)
 const editingProfile = ref<ApiProfile | null>(null)
+const editingProvider = ref<ApiProvider | null>(null)
 const newModelInput = ref("")
+const newProviderModelInput = ref("")
+const providerHeadersText = ref("{}")
 const isNewProfile = ref(false)
+const isNewProvider = ref(false)
+
+// 当前 Profile 可用的模型列表（若关联提供商，则来自提供商；否则来自自身 models）
+const currentProfileAvailableModels = computed(() => {
+  if (!editingProfile.value) return []
+  if (editingProfile.value.providerId) {
+    const prov = providers.value.find(p => p.id === editingProfile.value?.providerId)
+    if (prov && prov.models && prov.models.length > 0) {
+      return prov.models.map(m => m.displayName || m.name || m.id)
+    }
+  }
+  return editingProfile.value.models && editingProfile.value.models.length > 0
+    ? editingProfile.value.models
+    : (editingProfile.value.model ? [editingProfile.value.model] : [])
+})
 
 // 日志调试开关及工具函数
 const enableDebugLog = ref(localStorage.getItem("sy_api_switch_debug") === "true")
 
 const saveLogSetting = () => {
   localStorage.setItem("sy_api_switch_debug", enableDebugLog.value ? "true" : "false")
-  /* removed toast */
 }
 
 const logDebug = (message: string, ...args: any[]) => {
   if (enableDebugLog.value) {
-    // console.log(`[API Switch Debug] ${message}`, ...args)
     if (message.toLowerCase().includes("error") || message.toLowerCase().includes("fail") || args.some(a => a instanceof Error)) {
       const errorObj = args.find(a => a instanceof Error)
       const errText = errorObj ? `${message}: ${errorObj.message}\n${errorObj.stack || ''}` : `${message} ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`
       showMessage(`调试日志: ${errText.substring(0, 300)}`, 10000, "error")
-    } else {
-      /* removed toast */
     }
   }
 }
@@ -506,7 +701,6 @@ const confirmDialog = ref<ConfirmState>({
 })
 
 const showCustomConfirm = (title: string, text: string, onConfirm: () => void, onCancel?: () => void) => {
-  logDebug(`showCustomConfirm called: ${title}`)
   confirmDialog.value = {
     show: true,
     title,
@@ -517,34 +711,27 @@ const showCustomConfirm = (title: string, text: string, onConfirm: () => void, o
 }
 
 const closeConfirm = (result: boolean) => {
-  logDebug(`closeConfirm called with result: ${result}`)
   confirmDialog.value.show = false
   if (result) {
     if (confirmDialog.value.onConfirm) {
       try {
-        logDebug("Executing onConfirm callback")
         const res = confirmDialog.value.onConfirm()
         if (res instanceof Promise) {
-          res.catch(err => {
-            logDebug("Async error in onConfirm callback", err)
-          })
+          res.catch(err => logDebug("Async error in onConfirm", err))
         }
       } catch (err) {
-        logDebug("Sync error in onConfirm callback", err)
+        logDebug("Sync error in onConfirm", err)
       }
     }
   } else {
     if (confirmDialog.value.onCancel) {
       try {
-        logDebug("Executing onCancel callback")
         const res = confirmDialog.value.onCancel()
         if (res instanceof Promise) {
-          res.catch(err => {
-            logDebug("Async error in onCancel callback", err)
-          })
+          res.catch(err => logDebug("Async error in onCancel", err))
         }
       } catch (err) {
-        logDebug("Sync error in onCancel callback", err)
+        logDebug("Sync error in onCancel", err)
       }
     }
   }
@@ -554,7 +741,6 @@ const closeConfirm = (result: boolean) => {
 const handleSafeNavigate = (navigateFn: () => void) => {
   if (isProfileDirty()) {
     showCustomConfirm("未保存的更改", "当前配置已被修改，是否放弃更改并离开？", () => {
-      // 放弃修改，重置快照并离开
       originalProfileState.value = ""
       navigateFn()
     })
@@ -571,7 +757,7 @@ const providerDefaults: Record<string, { baseUrl: string; model: string; provide
     providerUrl: "https://www.deepseek.com"
   },
   gemini: {
-    baseUrl: "https://generativetoolkit.googleapis.com", // 思源笔记通用或直连代理
+    baseUrl: "https://generativetoolkit.googleapis.com",
     model: "gemini-2.5-flash",
     providerUrl: "https://deepmind.google/technologies/gemini"
   },
@@ -627,17 +813,18 @@ const openProviderUrl = (url: string) => {
 const hasSiyuanBuiltInAi = ref(false)
 const siyuanBuiltInAiInfo = ref("")
 
-// 检测思源笔记内置的 AI 配置信息（分为编辑器与智能体两条路线）
+// 检测思源笔记内置的 AI 配置信息
 const checkSiyuanBuiltInAi = () => {
   try {
     const ai = (window as any).siyuan?.config?.ai
     if (ai) {
       const extracted = extractSiyuanAiSettings(ai)
-      if (extracted.editing || extracted.agent) {
+      if (extracted.editing || extracted.agent || extracted.decision) {
         hasSiyuanBuiltInAi.value = true
         const edModel = extracted.editing ? `${extracted.editing.provider} (${extracted.editing.model})` : "未配置"
         const agModel = extracted.agent ? `${extracted.agent.provider} (${extracted.agent.model})` : "未配置"
-        siyuanBuiltInAiInfo.value = `编辑器: ${edModel} | 智能体: ${agModel}`
+        const dcModel = extracted.decision ? `决策: ${extracted.decision.model}` : "决策未配"
+        siyuanBuiltInAiInfo.value = `编辑器: ${edModel} | 智能体: ${agModel} | ${dcModel}`
         return
       }
     }
@@ -665,41 +852,19 @@ const handleFileImport = (e: Event) => {
   reader.onload = async (event) => {
     try {
       const content = event.target?.result as string
-      const parsed = JSON.parse(content)
-
-      let importedArray: ApiProfile[] = []
-      if (Array.isArray(parsed)) {
-        importedArray = parsed
-      } else if (parsed && typeof parsed === "object") {
-        if (Array.isArray(parsed.profiles)) {
-          importedArray = parsed.profiles
-        } else if (parsed.id && parsed.name && parsed.provider) {
-          importedArray = [parsed]
+      showCustomConfirm("导入 AI 配置", "确定要导入该 JSON 配置文件吗？将自动解析提供商与各场景配置。", async () => {
+        try {
+          const res = await apiSwitchCore.importSiyuanAiJson(content)
+          refreshData()
+          showMessage(`导入成功！解析了 ${res.providersCount} 个提供商与 ${res.profilesCount} 个场景配置。`, 4000, "info")
+        } catch (err: any) {
+          logDebug("导入解析失败", err)
+          showMessage(`导入失败: ${err.message || err}`, 5000, "error")
         }
-      }
-
-      if (importedArray.length === 0) {
-        showMessage(usePlugin().i18n.noValidApiConfig, 5000, "error")
-        return
-      }
-
-      showCustomConfirm(
-        "导入 API 配置",
-        `确定要从文件导入 ${importedArray.length} 个配置吗？重名的配置将被更新覆盖。`,
-        async () => {
-          try {
-            const { added, updated } = await apiSwitchCore.importProfiles(importedArray)
-            refreshData()
-            /* removed toast */
-          } catch (err: any) {
-            logDebug("导入 API 配置失败", err)
-            showMessage(usePlugin().i18n.importFailed.replace("{error}", err.message || err), 5000, "error")
-          }
-        }
-      )
+      })
     } catch (err: any) {
-      logDebug("解析导入的 JSON 文件失败", err)
-      showMessage(usePlugin().i18n.parseFailed.replace("{error}", err.message || err), 5000, "error")
+      logDebug("读取文件失败", err)
+      showMessage(`读取失败: ${err.message || err}`, 5000, "error")
     }
   }
   reader.readAsText(file)
@@ -707,55 +872,82 @@ const handleFileImport = (e: Event) => {
 
 const exportProfiles = () => {
   try {
-    if (profiles.value.length === 0) {
-      showMessage(usePlugin().i18n.noConfigToExport, 3000, "warning")
-      return
-    }
-    const dataStr = JSON.stringify(profiles.value, null, 2)
+    const dataStr = apiSwitchCore.exportSiyuanAiJson()
     const blob = new Blob([dataStr], { type: "application/json" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
-    link.download = `siyuan-api-profiles-${new Date().toISOString().slice(0, 10)}.json`
+    link.download = `siyuan-ai-${new Date().toISOString().slice(0, 10)}.json`
     link.click()
     URL.revokeObjectURL(url)
-    /* removed toast */
   } catch (err: any) {
     logDebug("导出配置文件失败", err)
-    showMessage(usePlugin().i18n.exportFailed.replace("{error}", err.message || err), 5000, "error")
+    showMessage(`导出失败: ${err.message || err}`, 5000, "error")
   }
 }
 
 // 数据同步刷新
 const refreshData = () => {
+  providers.value = [...apiSwitchCore.getProviders()]
   profiles.value = [...apiSwitchCore.getProfiles()]
   registeredPlugins.value = [...apiSwitchCore.getRegisteredPlugins()]
   
   if (activePluginId.value) {
     activePlugin.value = registeredPlugins.value.find(p => p.pluginId === activePluginId.value) || null
   }
+  if (selectedProviderId.value) {
+    const prov = providers.value.find(p => p.id === selectedProviderId.value)
+    if (prov) editingProvider.value = JSON.parse(JSON.stringify(prov))
+  }
+  if (selectedProfileId.value) {
+    const prof = profiles.value.find(p => p.id === selectedProfileId.value)
+    if (prof) editingProfile.value = JSON.parse(JSON.stringify(prof))
+  }
 
-  // 刷新时同步检查思源内置 AI
   checkSiyuanBuiltInAi()
+}
+
+// 顶栏快捷操作：从思源同步
+const syncFromSiyuanAction = async () => {
+  showCustomConfirm("从思源同步配置", "确定要从思源笔记「设置-人工智能」中读取并同步所有的 API 提供商、编辑器、智能体与决策模型配置吗？", async () => {
+    try {
+      const res = await apiSwitchCore.syncFromSiyuan()
+      refreshData()
+      showMessage(`成功从思源同步！更新了 ${res.providersCount} 个提供商与 ${res.profilesCount} 个配置。`, 4000, "info")
+    } catch (err: any) {
+      logDebug("从思源同步失败", err)
+      showMessage(`同步失败: ${err.message || err}`, 5000, "error")
+    }
+  })
+}
+
+// 顶栏快捷操作：全量写回思源
+const applyAllToSiyuanAction = async () => {
+  showCustomConfirm("全量写回思源笔记", "确定要将当前 API 旋钮中的所有提供商、编辑器、智能体、决策模型配置全量写回思源笔记系统设置吗？", async () => {
+    try {
+      await apiSwitchCore.applyAllToSiyuan()
+      showMessage("全量配置已成功写回思源笔记系统设置！", 4000, "info")
+    } catch (err: any) {
+      logDebug("全量写回思源失败", err)
+      showMessage(`写回思源失败: ${err.message || err}`, 5000, "error")
+    }
+  })
 }
 
 const importLocalConfig = async (pluginId: string) => {
   showCustomConfirm("导入本地配置", "确定要将此插件的本地配置（含高级参数）导入为全局 API Profile 并由 API 旋钮接管吗？", async () => {
     await apiSwitchCore.importLocalConfigToProfile(pluginId)
     refreshData()
-    /* removed toast */
   })
 }
 
 const importSiyuanBuiltInAi = async () => {
   showCustomConfirm(
     "导入思源内置 AI 配置",
-    "将分别读取思源笔记「API-编辑器」与「API-智能体」的基础与高级参数，并导入创建两套 Profile，确定继续吗？",
+    "将读取思源笔记「设置 -> AI」中的所有提供商、编辑器、智能体与决策模型并完整同步，确定继续吗？",
     async () => {
-      await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_editing")
-      await apiSwitchCore.importLocalConfigToProfile("siyuan_builtin_agent")
+      await apiSwitchCore.syncFromSiyuan()
       refreshData()
-      /* removed toast */
     }
   )
 }
@@ -831,7 +1023,6 @@ const onResizeStart = (e: MouseEvent, direction: string) => {
     const dx = moveEvent.clientX - startX
     const dy = moveEvent.clientY - startY
 
-    // 水平方向
     if (direction.includes('e')) {
       const targetW = startW + dx
       const newW = Math.min(maxW, Math.max(minW, targetW))
@@ -846,7 +1037,6 @@ const onResizeStart = (e: MouseEvent, direction: string) => {
       dialogTranslateX.value = startTx - deltaW / 2
     }
 
-    // 垂直方向
     if (direction.includes('s')) {
       const targetH = startH + dy
       const newH = Math.min(maxH, Math.max(minH, targetH))
@@ -973,7 +1163,6 @@ onMounted(() => {
   apiSwitchCore.onStateChange = refreshData
   refreshData()
   
-  // 注册插件专属打开设置的方法
   window._sy_api_switch = window._sy_api_switch || {}
   window._sy_api_switch.openSetting = () => {
     openDialog()
@@ -1001,20 +1190,147 @@ const closeDialog = () => {
   })
 }
 
+// ===================== 提供商交互 =====================
+
+const createNewProvider = () => {
+  handleSafeNavigate(() => {
+    selectedProfileId.value = null
+    activePluginId.value = null
+    selectedProviderId.value = null
+    isNewProvider.value = true
+    activeView.value = 'provider'
+    showApiKey.value = false
+    newProviderModelInput.value = ""
+    providerHeadersText.value = "{}"
+    editingProvider.value = {
+      id: "",
+      displayName: "新 API 提供商",
+      enabled: true,
+      baseUrl: "",
+      apiKey: "",
+      protocol: "openai",
+      requestTimeout: 30,
+      headers: {},
+      models: [
+        { id: "gpt-4o", name: "gpt-4o", displayName: "gpt-4o", enabled: true }
+      ]
+    }
+  })
+}
+
+const selectProvider = (id: string) => {
+  handleSafeNavigate(() => {
+    selectedProfileId.value = null
+    activePluginId.value = null
+    selectedProviderId.value = id
+    isNewProvider.value = false
+    activeView.value = 'provider'
+    showApiKey.value = false
+    newProviderModelInput.value = ""
+
+    const prov = providers.value.find(p => p.id === id)
+    if (prov) {
+      editingProvider.value = JSON.parse(JSON.stringify(prov))
+      providerHeadersText.value = prov.headers ? JSON.stringify(prov.headers, null, 2) : "{}"
+    }
+  })
+}
+
+const addModelToEditingProvider = () => {
+  const name = newProviderModelInput.value.trim()
+  if (!name || !editingProvider.value) return
+  if (!editingProvider.value.models) editingProvider.value.models = []
+  if (!editingProvider.value.models.some(m => m.name === name || m.id === name)) {
+    editingProvider.value.models.push({
+      id: name,
+      name: name,
+      displayName: name,
+      enabled: true
+    })
+  }
+  newProviderModelInput.value = ""
+}
+
+const removeModelFromProvider = (idx: number) => {
+  if (!editingProvider.value || !editingProvider.value.models) return
+  editingProvider.value.models.splice(idx, 1)
+}
+
+const cancelProviderEdit = () => {
+  activeView.value = 'empty'
+  selectedProviderId.value = null
+  editingProvider.value = null
+}
+
+const saveProvider = async () => {
+  if (!editingProvider.value) return
+  const ep = editingProvider.value
+  if (!ep.displayName.trim() || !ep.baseUrl.trim()) {
+    showMessage("请填写提供商名称与 API 基础地址", 5000, "error")
+    return
+  }
+
+  try {
+    if (providerHeadersText.value.trim()) {
+      ep.headers = JSON.parse(providerHeadersText.value)
+    } else {
+      ep.headers = {}
+    }
+  } catch (e: any) {
+    showMessage("自定义 Headers JSON 格式不合法: " + e.message, 5000, "error")
+    return
+  }
+
+  if (isNewProvider.value) {
+    const created = await apiSwitchCore.addProvider(ep)
+    selectedProviderId.value = created.id
+    isNewProvider.value = false
+  } else {
+    await apiSwitchCore.updateProvider(ep)
+  }
+
+  refreshData()
+  showMessage("API 提供商保存成功", 3000, "info")
+}
+
+const deleteProvider = (id: string) => {
+  showCustomConfirm("删除提供商", "确定要删除该提供商吗？关联该提供商的配置将转为独立配置。", async () => {
+    await apiSwitchCore.deleteProvider(id)
+    activeView.value = 'empty'
+    selectedProviderId.value = null
+    editingProvider.value = null
+    refreshData()
+  })
+}
+
+const quickDeleteProvider = (prov: ApiProvider) => {
+  showCustomConfirm("删除提供商", `确定要删除提供商「${prov.displayName}」吗？`, async () => {
+    if (editingProvider.value && editingProvider.value.id === prov.id) {
+      activeView.value = 'empty'
+      selectedProviderId.value = null
+      editingProvider.value = null
+    }
+    await apiSwitchCore.deleteProvider(prov.id)
+    refreshData()
+  })
+}
+
+// ===================== Profile 交互 =====================
+
 const selectProfile = (id: string) => {
   const doSelect = () => {
     activePluginId.value = null
+    selectedProviderId.value = null
     selectedProfileId.value = id
     isNewProfile.value = false
     activeView.value = 'profile'
     showApiKey.value = false
-    showAdvanced.value = false // 切换Profile时收起高级
-    newModelInput.value = "" // 重置输入框
+    showAdvanced.value = false
+    newModelInput.value = ""
 
     const profile = profiles.value.find(p => p.id === id)
     if (profile) {
       editingProfile.value = { ...profile }
-      // 向后兼容处理
       if (!editingProfile.value.models || !Array.isArray(editingProfile.value.models)) {
         editingProfile.value.models = editingProfile.value.model ? [editingProfile.value.model] : []
       }
@@ -1027,6 +1343,7 @@ const selectProfile = (id: string) => {
 const selectPlugin = (pluginId: string) => {
   const doSelect = () => {
     selectedProfileId.value = null
+    selectedProviderId.value = null
     activePluginId.value = pluginId
     activeView.value = 'plugin'
     activePlugin.value = registeredPlugins.value.find(p => p.pluginId === pluginId) || null
@@ -1037,12 +1354,13 @@ const selectPlugin = (pluginId: string) => {
 const createNewProfile = () => {
   const doCreate = () => {
     activePluginId.value = null
+    selectedProviderId.value = null
     selectedProfileId.value = null
     isNewProfile.value = true
     activeView.value = 'profile'
     showApiKey.value = false
-    showAdvanced.value = false // 新建时默认收起高级
-    newModelInput.value = "" // 重置输入框
+    showAdvanced.value = false
+    newModelInput.value = ""
 
     const defaultProvider = "deepseek"
     const defaults = providerDefaults[defaultProvider]
@@ -1051,6 +1369,7 @@ const createNewProfile = () => {
     editingProfile.value = {
       id: "",
       name: "新配置",
+      providerId: undefined,
       provider: defaultProvider,
       baseUrl: defaults.baseUrl,
       apiKey: "",
@@ -1067,21 +1386,38 @@ const createNewProfile = () => {
   handleSafeNavigate(doCreate)
 }
 
+// 关联提供商切换
+const onProfileProviderSelect = () => {
+  if (!editingProfile.value) return
+  const provId = editingProfile.value.providerId
+  if (provId) {
+    const prov = providers.value.find(p => p.id === provId)
+    if (prov) {
+      editingProfile.value.provider = prov.protocol || "custom"
+      editingProfile.value.baseUrl = prov.baseUrl
+      editingProfile.value.apiKey = prov.apiKey
+      if (prov.models && prov.models.length > 0) {
+        editingProfile.value.models = prov.models.map(m => m.displayName || m.name || m.id)
+        if (!editingProfile.value.models.includes(editingProfile.value.model)) {
+          editingProfile.value.model = editingProfile.value.models[0] || ""
+        }
+      }
+    }
+  }
+}
+
 const onProviderChange = () => {
   if (!editingProfile.value) return
   const prov = editingProfile.value.provider
   const defaults = providerDefaults[prov]
   if (defaults) {
-    // 仅在字段为空时填充默认值，已有信息不覆盖
     if (!editingProfile.value.baseUrl) editingProfile.value.baseUrl = defaults.baseUrl
     if (!editingProfile.value.model) editingProfile.value.model = defaults.model
     if (!editingProfile.value.providerUrl) editingProfile.value.providerUrl = defaults.providerUrl
     
-    // 初始化/覆盖 models 为新服务商的预设模型
     const defaultModels = presetModels[prov] ? [...presetModels[prov]] : [defaults.model]
     editingProfile.value.models = defaultModels
     
-    // 如果当前的 model 字段不在新的 models 列表中，默认把 model 设为新列表的第一个
     if (!defaultModels.includes(editingProfile.value.model)) {
       editingProfile.value.model = defaultModels[0] || defaults.model
     }
@@ -1100,7 +1436,6 @@ const selectPresetModel = (e: Event) => {
     }
     editingProfile.value.model = val
   }
-  // 恢复选择框默认选项，允许重复选中同一项添加
   selectEl.value = ""
 }
 
@@ -1121,7 +1456,6 @@ const addCustomModel = () => {
 const removeModel = (modelName: string) => {
   if (!editingProfile.value || !editingProfile.value.models) return
   editingProfile.value.models = editingProfile.value.models.filter(m => m !== modelName)
-  // 如果被删除的是当前启用的模型，自动把 model 设为余下的第一个模型，或者空字符串
   if (editingProfile.value.model === modelName) {
     editingProfile.value.model = editingProfile.value.models[0] || ""
   }
@@ -1131,7 +1465,6 @@ const cancelEdit = () => {
   handleSafeNavigate(() => {
     activeView.value = 'empty'
     selectedProfileId.value = null
-    // 错开 tick 设为 null，避免 Vue 依赖更新时在表单模板中触发空指针异常
     setTimeout(() => {
       editingProfile.value = null
     }, 0)
@@ -1141,8 +1474,12 @@ const cancelEdit = () => {
 const saveProfile = async () => {
   if (!editingProfile.value) return
   const ep = editingProfile.value
-  if (!ep.name.trim() || !ep.baseUrl.trim() || !ep.apiKey.trim() || !ep.model.trim()) {
-    showMessage(usePlugin().i18n.fillRequiredFields, 5000, "error")
+  if (!ep.name.trim() || !ep.model.trim()) {
+    showMessage("请填写配置名称与模型名称", 5000, "error")
+    return
+  }
+  if (!ep.providerId && (!ep.baseUrl.trim() || !ep.apiKey.trim())) {
+    showMessage("独立配置必须填写 API 基础 URL 与 API 密钥", 5000, "error")
     return
   }
 
@@ -1154,11 +1491,8 @@ const saveProfile = async () => {
     await apiSwitchCore.updateProfile(ep)
   }
   
-  /* removed toast */
-  
   refreshData()
   
-  // 更新快照，防止跳转拦截
   const savedProfile = profiles.value.find(p => p.id === selectedProfileId.value)
   if (savedProfile) {
     editingProfile.value = { ...savedProfile }
@@ -1167,92 +1501,60 @@ const saveProfile = async () => {
     recordProfileSnapshot(ep)
   }
   
-  // 保持当前 profile 的选中状态
   selectProfile(selectedProfileId.value!)
 }
 
 const deleteProfile = async (id: string) => {
-  logDebug(`deleteProfile triggered for id: ${id}`)
   showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
     try {
-      logDebug(`deleteProfile onConfirm started for id: ${id}`)
-      originalProfileState.value = "" // 阻止脏检查
-      
-      logDebug(`Calling apiSwitchCore.deleteProfile for id: ${id}`)
+      originalProfileState.value = ""
       await apiSwitchCore.deleteProfile(id)
-      logDebug(`apiSwitchCore.deleteProfile successful for id: ${id}`)
-      
       activeView.value = 'empty'
       selectedProfileId.value = null
-      
-      logDebug("Refreshing data after deletion")
       refreshData()
-      /* removed toast */
-      
-      // 错开 tick 设为 null，防止销毁前触发表单空指针
       setTimeout(() => {
         editingProfile.value = null
-        logDebug("editingProfile cleared in setTimeout (deleteProfile)")
       }, 0)
     } catch (err) {
-      logDebug("Exception caught in deleteProfile onConfirm", err)
+      logDebug("Exception in deleteProfile", err)
     }
   })
 }
 
-// 侧边栏 Hover 快捷删除
 const quickDeleteProfile = (prof: ApiProfile) => {
-  logDebug(`quickDeleteProfile triggered for id: ${prof.id}, name: ${prof.name}`)
   showCustomConfirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
     try {
-      logDebug(`quickDeleteProfile onConfirm started for id: ${prof.id}`)
       if (editingProfile.value && editingProfile.value.id === prof.id) {
-        originalProfileState.value = "" // 阻止脏检查
+        originalProfileState.value = ""
         activeView.value = 'empty'
         selectedProfileId.value = null
-        
-        // 错开 tick 设为 null，防止销毁前触发表单空指针
         setTimeout(() => {
           editingProfile.value = null
-          logDebug("editingProfile cleared in setTimeout (quickDeleteProfile)")
         }, 0)
       }
-      
-      logDebug(`Calling apiSwitchCore.deleteProfile for id: ${prof.id}`)
       await apiSwitchCore.deleteProfile(prof.id)
-      logDebug(`apiSwitchCore.deleteProfile successful for id: ${prof.id}`)
-      
       refreshData()
-      /* removed toast */
     } catch (err) {
-      logDebug("Exception caught in quickDeleteProfile onConfirm", err)
+      logDebug("Exception in quickDeleteProfile", err)
     }
   })
 }
 
-// 侧边栏 Hover 快捷将当前配置应用到所有项目
 const applyProfileToAll = (prof: ApiProfile) => {
-  logDebug(`applyProfileToAll triggered for id: ${prof.id}, name: ${prof.name}`)
   showCustomConfirm("一键配置", `确定要将 API 配置「${prof.name}」应用到所有接管项目吗？这将会覆盖当前所有子插件和思源内置 AI 的绑定配置。`, async () => {
     try {
-      logDebug(`applyProfileToAll onConfirm started for id: ${prof.id}`)
       await apiSwitchCore.applyProfileToAllPlugins(prof.id)
-      logDebug(`apiSwitchCore.applyProfileToAllPlugins successful for id: ${prof.id}`)
-      
       refreshData()
-      /* removed toast */
     } catch (err) {
-      logDebug("Exception caught in applyProfileToAll onConfirm", err)
+      logDebug("Exception in applyProfileToAll", err)
     }
   })
 }
 
-// 侧边栏 Hover 快捷解除接管
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
     await apiSwitchCore.bindPlugin(plug.pluginId, "")
     refreshData()
-    /* removed toast */
   })
 }
 

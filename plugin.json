@@ -19,7 +19,7 @@
   "description": {
     "default": "Unified AI API switch for SiYuan plugins.",
     "en_US": "Provide unified AI API configurations and profile sharing for other plugins.",
-    "zh_CN": "思源笔记 API 旋钮，为本地其他 AI 插件提供一键共享、分发和接管 API 的服务。"
+    "zh_CN": "一键接管 AI 服务 API 配置，多插件无缝调用。"
   },
   "readme": {
     "default": "README.md",

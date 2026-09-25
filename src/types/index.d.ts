@@ -133,10 +133,12 @@ export interface SharedConfig {
   profileId: string;      // 绑定的 Profile ID
   profileName: string;    // Profile 的名称，如 "DeepSeek-Default"
   provider: string;       // 服务商标识，如 "openai", "google", "deepseek", "siliconflow", "custom"
+  protocol?: string;      // 协议类型，如 "openai", "gemini", "anthropic"
   baseUrl: string;        // API 基础 URL
   apiKey: string;         // API 密钥
   model: string;          // 模型名称
   models?: string[];      // 候选模型列表
+  headers?: Record<string, string>; // 自定义 HTTP 请求头
   requestTimeoutSeconds?: number; // 请求超时时间（秒）
   temperature?: number;   // 采样温度
   maxTokens?: number;     // 最大 Token 数
@@ -147,8 +149,75 @@ export interface SharedConfig {
   streamIdleTimeout?: number;    // 智能体：流空闲超时时间(s)
   confirmTimeout?: number;       // 智能体：确认超时时间(s)
   maxRetries?: number;           // 智能体：最大重试次数
+  isDecisionModel?: boolean;     // 是否为决策模型
   memo?: string;          // 备注
   providerUrl?: string;   // 服务商官网链接
+}
+
+export interface ApiProviderModel {
+  id: string;
+  name: string;
+  displayName?: string;
+  enabled?: boolean;
+  contextLength?: number;
+}
+
+export interface ApiProvider {
+  id: string;
+  displayName: string;
+  enabled?: boolean;
+  apiKey: string;
+  baseUrl: string;
+  protocol?: string;
+  requestTimeout?: number;
+  headers?: Record<string, string>;
+  models: ApiProviderModel[];
+}
+
+export interface SiyuanAiJson {
+  providers?: Array<{
+    id: string;
+    displayName?: string;
+    enabled?: boolean;
+    apiKey: string;
+    baseURL: string;
+    protocol?: string;
+    requestTimeout?: number;
+    headers?: Record<string, string>;
+    models: Array<{
+      id: string;
+      name: string;
+      displayName?: string;
+      enabled?: boolean;
+      contextLength?: number;
+    }>;
+  }>;
+  editing?: {
+    modelId: string;
+    maxHistoryMessages?: number;
+    temperature?: number;
+    maxCompletionTokens?: number;
+  };
+  agent?: {
+    modelId: string;
+    sessionTimeout?: number;
+    streamIdleTimeout?: number;
+    confirmTimeout?: number;
+    maxRetries?: number;
+    temperature?: number;
+    maxCompletionTokens?: number;
+    maxToolCallRounds?: number;
+    capabilityPolicy?: any;
+    approvalPolicy?: any;
+    skills?: any;
+  };
+  decision?: {
+    enabled?: boolean;
+    endpoint: string;
+    apiKey: string;
+    name: string;
+    timeout?: number;
+  };
 }
 
 export interface SiyuanApiSwitch {
