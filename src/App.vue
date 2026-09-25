@@ -287,7 +287,7 @@
               </div>
 
               <div class="form-actions">
-                <button class="b3-button b3-button--error" v-if="!isNewProvider" @click="deleteProvider(editingProvider.id)">删除</button>
+                <button class="b3-button b3-button--error" v-if="!isNewProvider" @click.stop="deleteProvider(editingProvider.id)" type="button">删除</button>
                 <div class="flex-spacer"></div>
                 <button class="b3-button b3-button--cancel" @click="cancelProviderEdit">取消</button>
                 <button class="b3-button b3-button--primary" @click="saveProvider">保存提供商</button>
@@ -474,7 +474,7 @@
               </div>
 
               <div class="form-actions">
-                <button class="b3-button b3-button--error" v-if="!isNewProfile" @click="deleteProfile(editingProfile.id)">删除</button>
+                <button class="b3-button b3-button--error" v-if="!isNewProfile" @click.stop="deleteProfile(editingProfile.id)" type="button">删除</button>
                 <div class="flex-spacer"></div>
                 <button class="b3-button b3-button--cancel" @click="cancelEdit">取消</button>
                 <button class="b3-button b3-button--primary" @click="saveProfile">保存</button>
@@ -584,7 +584,7 @@
     </div>
 
     <!-- 自定义精美确认弹窗 (与 dialog-overlay 平级，移出 switch-dialog 以免被其 overflow: hidden 裁剪或事件冒泡阻挡) -->
-    <div class="confirm-overlay" v-if="confirmDialog.show">
+    <div class="confirm-overlay" v-if="confirmDialog.show" @click.self="closeConfirm(false)">
           <div class="confirm-dialog animate-fade-in">
             <div class="confirm-title">{{ confirmDialog.title }}</div>
             <div class="confirm-text">{{ confirmDialog.text }}</div>
@@ -1304,13 +1304,14 @@ const deleteProvider = (id: string) => {
 }
 
 const quickDeleteProvider = (prov: ApiProvider) => {
-  showCustomConfirm("删除提供商", `确定要删除提供商「${prov.displayName}」吗？`, async () => {
+  selectProvider(prov.id)
+  showCustomConfirm("删除提供商", `确定要删除提供商「${prov.displayName}」吗？关联该提供商的配置将转为独立配置。`, async () => {
+    await apiSwitchCore.deleteProvider(prov.id)
     if (editingProvider.value && editingProvider.value.id === prov.id) {
       activeView.value = 'empty'
       selectedProviderId.value = null
       editingProvider.value = null
     }
-    await apiSwitchCore.deleteProvider(prov.id)
     refreshData()
   })
 }
@@ -1522,6 +1523,7 @@ const deleteProfile = async (id: string) => {
 }
 
 const quickDeleteProfile = (prof: ApiProfile) => {
+  selectProfile(prof.id)
   showCustomConfirm("删除配置", `确定要删除 API 配置「${prof.name}」吗？绑定此配置的插件将被取消接管。`, async () => {
     try {
       if (editingProfile.value && editingProfile.value.id === prof.id) {
@@ -1593,7 +1595,7 @@ const onBindingChange = async (e: Event) => {
 .dialog-overlay {
   width: 100%;
   height: 100%;
-  background-color: var(--b3-theme-background-light, rgba(0, 0, 0, 0.4));
+  background-color: var(--b3-mask-background, rgba(0, 0, 0, 0.45));
   backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
@@ -2455,7 +2457,8 @@ const onBindingChange = async (e: Event) => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: var(--b3-theme-background-light, rgba(0, 0, 0, 0.4));
+  background-color: var(--b3-mask-background, rgba(0, 0, 0, 0.45));
+  backdrop-filter: blur(2px);
     z-index: 2100;
   display: flex;
   justify-content: center;
