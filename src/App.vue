@@ -17,19 +17,49 @@
             <span>API 旋钮 (siyuan-api-switch)</span>
           </div>
           <div class="header-actions">
-            <button class="header-btn" @click="syncFromSiyuanAction" data-tooltip="从思源读取 AI 配置并同步" data-tooltip-position="bottom">
-              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            </button>
-            <button class="header-btn" @click="applyAllToSiyuanAction" data-tooltip="一键将全量配置写回思源笔记" data-tooltip-position="bottom">
-              <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-            </button>
-            <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? '还原窗口' : '最大化窗口'" data-tooltip-position="bottom">
-              <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
-              <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
-            </button>
-            <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
-              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
+            <!-- 业务同步操作组（凸显核心功能） -->
+            <div class="header-sync-group">
+              <button 
+                class="header-sync-btn header-sync-btn--read" 
+                @click="syncFromSiyuanAction" 
+                data-tooltip="从思源读取 AI 配置并同步" 
+                data-tooltip-position="bottom"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>读取思源配置</span>
+              </button>
+              <button 
+                class="header-sync-btn header-sync-btn--write" 
+                @click="applyAllToSiyuanAction" 
+                data-tooltip="一键将全量配置写回思源笔记" 
+                data-tooltip-position="bottom"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>写回思源</span>
+              </button>
+            </div>
+
+            <!-- 分割线 -->
+            <div class="header-divider"></div>
+
+            <!-- 窗口控制组 -->
+            <div class="header-window-group">
+              <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? '还原窗口' : '最大化窗口'" data-tooltip-position="bottom">
+                <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
+                <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+              </button>
+              <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1664,8 +1694,90 @@ const onBindingChange = async (e: Event) => {
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
     cursor: default;
+  }
+
+  .header-sync-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .header-sync-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 11px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    box-sizing: border-box;
+    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+
+    svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      transition: transform 0.18s ease;
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+
+    /* 读取思源配置：清晰高对比度描边按钮（无低对比度浅蓝底色） */
+    &--read {
+      background-color: transparent;
+      border: 1.5px solid var(--b3-theme-primary);
+      color: var(--b3-theme-primary);
+
+      &:hover {
+        background-color: var(--b3-theme-primary);
+        color: var(--b3-theme-on-primary, #ffffff);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+
+        svg {
+          transform: translateY(1px);
+        }
+      }
+    }
+
+    /* 写回思源：主色实心高亮按钮（保持高对比度白字） */
+    &--write {
+      background-color: var(--b3-theme-primary);
+      border: 1.5px solid var(--b3-theme-primary);
+      color: var(--b3-theme-on-primary, #ffffff);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+
+      &:hover {
+        filter: brightness(1.1);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+
+        svg {
+          transform: translateY(-1px);
+        }
+      }
+    }
+  }
+
+  .header-divider {
+    width: 1px;
+    height: 18px;
+    background-color: var(--b3-border-color);
+    margin: 0 2px;
+    opacity: 0.8;
+  }
+
+  .header-window-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .header-btn, .close-btn {
