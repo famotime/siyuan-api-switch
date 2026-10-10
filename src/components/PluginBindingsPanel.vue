@@ -19,7 +19,7 @@
 
       <div v-if="!plugin.isBound && plugin.localConfig && (plugin.localConfig.baseUrl || plugin.localConfig.apiKey || plugin.localConfig.model)" class="local-config-import-card animate-fade-in" style="margin-bottom: 16px;">
         <div class="import-card-title">
-          💡 检测到该插件已有本地配置与高级参数
+          💡 检测到该{{ plugin.pluginId.startsWith('siyuan_builtin') ? '系统模块' : '插件' }}已有配置与高级参数
         </div>
         <div class="import-card-desc" style="margin-top: 6px; line-height: 1.6;">
           <div>基础参数：服务商 <strong>{{ getProviderName(plugin.localConfig.provider) }}</strong> | 模型 <strong>{{ plugin.localConfig.model || '未指定' }}</strong> | 地址 <code>{{ plugin.localConfig.baseUrl || '无' }}</code></div>
@@ -33,8 +33,12 @@
             <span v-if="(plugin.localConfig as any).streamIdleTimeout !== undefined"> | 流空闲超时 <strong>{{ (plugin.localConfig as any).streamIdleTimeout }}s</strong></span>
           </div>
         </div>
+        <div v-if="plugin.matchedProfileName" class="matched-profile-hint" style="margin-top: 8px; padding: 6px 10px; background: rgba(54, 163, 247, 0.12); border-left: 3px solid #36a3f7; border-radius: 4px; font-size: 12px; color: var(--b3-theme-on-surface);">
+          ✨ 检测到与已有场景配置 <strong>「{{ plugin.matchedProfileName }}」</strong> 一致，点击将直接复用绑定，避免生成重复配置
+        </div>
         <button class="b3-button b3-button--primary import-action-btn" style="margin-top: 10px; padding: 4px 10px; font-size: 11px; height: auto;" @click="$emit('importLocalConfig', plugin.pluginId)">
-          📥 一键导入为 Profile 并接管
+          <span v-if="plugin.matchedProfileName">🔗 直接绑定已有配置「{{ plugin.matchedProfileName }}」并接管</span>
+          <span v-else>📥 一键导入为 Profile 并接管</span>
         </button>
       </div>
 

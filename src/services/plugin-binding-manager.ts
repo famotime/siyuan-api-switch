@@ -6,6 +6,8 @@ export interface RegisteredPluginInfo {
   isBound: boolean;
   boundProfileId: string;
   localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
+  matchedProfileId?: string;
+  matchedProfileName?: string;
 }
 
 export interface PluginRegistration {

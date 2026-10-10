@@ -647,9 +647,15 @@ const onBindingChange = async (profileId: string) => {
 }
 
 const importLocalConfig = async (pluginId: string) => {
-  await apiSwitchCore.importLocalConfigToProfile(pluginId)
+  const res = await apiSwitchCore.importLocalConfigToProfile(pluginId)
   refreshData()
-  showMessage("本地配置已导入并自动完成接管", 3000, "info")
+  if (res?.action === "reused") {
+    showMessage(`检测到与已有配置「${res.profile.name}」一致，已自动绑定，避免生成重复配置`, 4000, "info")
+  } else if (res?.action === "created") {
+    showMessage(`已基于本地配置新建「${res.profile.name}」并完成接管`, 3000, "info")
+  } else {
+    showMessage("已完成接管更新", 3000, "info")
+  }
 }
 
 // 导入导出与思源同步
@@ -697,7 +703,15 @@ const syncFromSiyuanAction = async () => {
   try {
     const res = await apiSwitchCore.syncFromSiyuan()
     refreshData()
-    showMessage(`已成功从思源同步！检测到 ${res.providersCount} 个提供商，已联动 ${res.profilesCount} 个场景配置。`, 4000, "info")
+    let detailMsg = ""
+    if (res.reusedProfilesCount > 0 && res.createdProfilesCount > 0) {
+      detailMsg = `（复用 ${res.reusedProfilesCount} 个已有配置，新增 ${res.createdProfilesCount} 个配置）`
+    } else if (res.reusedProfilesCount > 0) {
+      detailMsg = `（已复用 ${res.reusedProfilesCount} 个一致的已有配置，未产生重复配置）`
+    } else if (res.createdProfilesCount > 0) {
+      detailMsg = `（新增 ${res.createdProfilesCount} 个配置）`
+    }
+    showMessage(`已成功从思源同步！检测到 ${res.providersCount} 个提供商，已联动 ${res.profilesCount} 个场景配置${detailMsg}。`, 4000, "info")
   } catch (err: any) {
     showMessage(`读取同步失败: ${err?.message || err}`, 5000, "error")
   }
