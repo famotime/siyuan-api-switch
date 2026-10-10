@@ -6,6 +6,7 @@ import "@/index.scss";
 import PluginInfoString from '@/../plugin.json'
 import { destroy, init } from '@/main'
 import { apiSwitchCore } from "@/services/api-switch-core";
+import { SyFrontendTypes } from "@/types";
 
 let PluginInfo = {
   version: '',

@@ -210,6 +210,28 @@ onunload() {
 
 ---
 
+## 💻 工程开发与测试
+
+本项目采用 Vue 3 + TypeScript 构建，分层服务架构并配备完整的 Vitest 自动化单元测试套件：
+
+```bash
+# 启动单元测试套件 (4 个模块，17 个用例秒级验证)
+npm test
+
+# 执行 TypeScript 静态类型检查
+npx tsc --noEmit
+
+# 生产环境构建打包 (输出 dist/ 及 package.zip)
+npm run build
+
+# 持续增量监听开发
+npm run dev
+```
+
+详细模块职责与项目架构说明请参阅 [docs/project-structure.md](docs/project-structure.md)。
+
+---
+
 ## 📄 开源许可证
 
 本项目基于 [MIT 许可证](LICENSE) 开源。
