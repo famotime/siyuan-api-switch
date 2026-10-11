@@ -639,15 +639,15 @@ const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   })
 }
 
-const onBindingChange = async (profileId: string) => {
+const onBindingChange = async (profileId: string, slotId?: string) => {
   if (!activePlugin.value) return
-  await apiSwitchCore.bindPlugin(activePlugin.value.pluginId, profileId)
+  await apiSwitchCore.bindPlugin(activePlugin.value.pluginId, profileId, slotId)
   refreshData()
   showMessage("接管配置已更新", 3000, "info")
 }
 
-const importLocalConfig = async (pluginId: string) => {
-  const res = await apiSwitchCore.importLocalConfigToProfile(pluginId)
+const importLocalConfig = async (pluginId: string, slotId?: string) => {
+  const res = await apiSwitchCore.importLocalConfigToProfile(pluginId, slotId)
   refreshData()
   if (res?.action === "reused") {
     showMessage(`检测到与已有配置「${res.profile.name}」一致，已自动绑定，避免生成重复配置`, 4000, "info")

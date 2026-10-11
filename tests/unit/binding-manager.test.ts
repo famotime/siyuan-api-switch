@@ -81,4 +81,78 @@ describe("子插件注册、接管绑定与实时通知分发", () => {
       })
     );
   });
+
+  it("多槽位插件（对话模型 + 决策模型）注册与分别独立接管绑定", async () => {
+    const decisionProfile: ApiProfile = {
+      id: "prof_decision",
+      name: "Decision Jev",
+      provider: "custom",
+      baseUrl: "https://api.typesafe.ai/v1/systemone",
+      apiKey: "sk-decision",
+      model: "jev-latest",
+      isDecisionModel: true,
+    };
+    (apiSwitchCore as any).profiles = [sampleProfile, decisionProfile];
+
+    const callback = vi.fn();
+    apiSwitchCore.registerPlugin(
+      "siyuan-mate",
+      "思源灵犀",
+      callback,
+      undefined,
+      [
+        { id: "chat", name: "对话模型", localConfig: { baseUrl: "http://127.0.0.1:11434", model: "deepseek-r1:1.5b", apiKey: "", provider: "ollama" } },
+        { id: "decision", name: "决策模型", localConfig: { baseUrl: "https://api.typesafe.ai", model: "jev-latest", apiKey: "", provider: "custom" } },
+      ]
+    );
+
+    // 初始注册时两个槽位分别收到通知 (slotId: 'chat', slotId: 'decision')
+    expect(callback).toHaveBeenCalledWith(null, "chat");
+    expect(callback).toHaveBeenCalledWith(null, "decision");
+
+    // 1. 独立绑定对话槽位至 sampleProfile
+    await apiSwitchCore.bindPlugin("siyuan-mate", "prof_share", "chat");
+    expect(callback).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        profileId: "prof_share",
+        model: "gpt-4o",
+      }),
+      "chat"
+    );
+
+    // 2. 独立绑定决策槽位至 decisionProfile
+    await apiSwitchCore.bindPlugin("siyuan-mate", "prof_decision", "decision");
+    expect(callback).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        profileId: "prof_decision",
+        model: "jev-latest",
+      }),
+      "decision"
+    );
+
+    // 3. 验证 getBoundSharedConfig 分别获取对应槽位
+    const chatBound = apiSwitchCore.getBoundSharedConfig("siyuan-mate", "chat");
+    expect(chatBound?.model).toBe("gpt-4o");
+    const decisionBound = apiSwitchCore.getBoundSharedConfig("siyuan-mate", "decision");
+    expect(decisionBound?.model).toBe("jev-latest");
+
+    // 4. 验证 getRegisteredPlugins 正确反映多槽位识别与状态
+    const registered = apiSwitchCore.getRegisteredPlugins();
+    const matePlug = registered.find((p) => p.pluginId === "siyuan-mate");
+    expect(matePlug).toBeDefined();
+    expect(matePlug?.slots?.length).toBe(2);
+    expect(matePlug?.slots?.[0].slotId).toBe("chat");
+    expect(matePlug?.slots?.[0].isBound).toBe(true);
+    expect(matePlug?.slots?.[0].boundProfileId).toBe("prof_share");
+    expect(matePlug?.slots?.[1].slotId).toBe("decision");
+    expect(matePlug?.slots?.[1].isBound).toBe(true);
+    expect(matePlug?.slots?.[1].boundProfileId).toBe("prof_decision");
+
+    // 5. 解除决策槽位绑定
+    await apiSwitchCore.bindPlugin("siyuan-mate", "", "decision");
+    expect(callback).toHaveBeenLastCalledWith(null, "decision");
+    expect(apiSwitchCore.getBoundSharedConfig("siyuan-mate", "decision")).toBeNull();
+    // 对话槽位依然处于接管状态
+    expect(apiSwitchCore.getBoundSharedConfig("siyuan-mate", "chat")?.model).toBe("gpt-4o");
+  });
 });

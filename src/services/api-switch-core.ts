@@ -1,12 +1,13 @@
 import { Plugin, fetchSyncPost } from "siyuan";
-import { SharedConfig, SiyuanApiSwitch, ApiProvider } from "@/types";
+import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions } from "@/types";
 import { ProviderStore } from "./provider-store";
 import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo } from "./siyuan-adapter";
 
 export type { ApiProfile } from "./profile-store";
-export type { RegisteredPluginInfo } from "./plugin-binding-manager";
+export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo } from "./plugin-binding-manager";
+export type { RegisterPluginOptions } from "@/types";
 export { extractSiyuanAiSettings };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
@@ -162,14 +163,36 @@ export class ApiSwitchCore {
   private mountGlobal() {
     const manager: SiyuanApiSwitch = {
       version: (this.plugin as any)?.version || "0.0.1",
-      register: (pluginId, displayName, callback, localConfig) => {
-        this.registerPlugin(pluginId, displayName, callback, localConfig);
+      register: (
+        pluginIdOrOptions: string | RegisterPluginOptions,
+        displayName?: string,
+        callback?: (config: SharedConfig | null, slotId?: string) => void,
+        localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
+        options?: { slots?: PluginSlotDefinition[] }
+      ) => {
+        if (typeof pluginIdOrOptions === "object" && pluginIdOrOptions !== null) {
+          this.registerPlugin(
+            pluginIdOrOptions.pluginId,
+            pluginIdOrOptions.displayName,
+            pluginIdOrOptions.callback,
+            pluginIdOrOptions.localConfig,
+            pluginIdOrOptions.slots
+          );
+        } else {
+          this.registerPlugin(
+            pluginIdOrOptions,
+            displayName!,
+            callback!,
+            localConfig,
+            options?.slots
+          );
+        }
       },
       unregister: (pluginId) => {
         this.unregisterPlugin(pluginId);
       },
-      getBoundConfig: (pluginId) => {
-        return this.getBoundSharedConfig(pluginId);
+      getBoundConfig: (pluginId, slotId) => {
+        return this.getBoundSharedConfig(pluginId, slotId);
       },
     };
 
@@ -191,14 +214,29 @@ export class ApiSwitchCore {
   }
 
   // 子插件注册逻辑
-  private registerPlugin(
+  public registerPlugin(
     pluginId: string,
     displayName: string,
-    callback: (config: SharedConfig | null) => void,
-    localConfig?: Omit<SharedConfig, "profileId" | "profileName">
+    callback: (config: SharedConfig | null, slotId?: string) => void,
+    localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
+    slots?: PluginSlotDefinition[]
   ) {
     const boundConfig = this.getBoundSharedConfig(pluginId);
-    this.bindingManager.registerPlugin(pluginId, displayName, callback, localConfig, boundConfig);
+    const initialSlotConfigs: Record<string, SharedConfig | null> = {};
+    if (slots && slots.length > 0) {
+      for (const slot of slots) {
+        initialSlotConfigs[slot.id] = this.getBoundSharedConfig(pluginId, slot.id);
+      }
+    }
+    this.bindingManager.registerPlugin(
+      pluginId,
+      displayName,
+      callback,
+      localConfig,
+      boundConfig,
+      slots,
+      initialSlotConfigs
+    );
     if (this.onStateChange) {
       this.onStateChange();
     }
@@ -229,8 +267,8 @@ export class ApiSwitchCore {
   }
 
   // 获取共享配置（供插件调用）
-  public getBoundSharedConfig(pluginId: string): SharedConfig | null {
-    const profileId = this.bindingManager.getBoundProfileId(pluginId);
+  public getBoundSharedConfig(pluginId: string, slotId?: string): SharedConfig | null {
+    const profileId = this.bindingManager.getBoundProfileId(pluginId, slotId);
     if (!profileId) return null;
 
     const rawProfile = this.profileStore.getProfile(profileId);
@@ -762,16 +800,14 @@ export class ApiSwitchCore {
     }
   }
 
-  // ===================== 插件接管与绑定 =====================
-
-  async bindPlugin(pluginId: string, profileId: string) {
+  async bindPlugin(pluginId: string, profileId: string, slotId?: string) {
     if (!profileId) {
-      this.bindingManager.removeBinding(pluginId);
-      this.bindingManager.notifyPluginUpdate(pluginId, null);
+      this.bindingManager.removeBinding(pluginId, slotId);
+      this.bindingManager.notifyPluginUpdate(pluginId, null, slotId);
     } else {
-      this.bindingManager.setBinding(pluginId, profileId);
-      const config = this.getBoundSharedConfig(pluginId);
-      this.bindingManager.notifyPluginUpdate(pluginId, config);
+      this.bindingManager.setBinding(pluginId, profileId, slotId);
+      const config = this.getBoundSharedConfig(pluginId, slotId);
+      this.bindingManager.notifyPluginUpdate(pluginId, config, slotId);
 
       const profile = this.profileStore.getProfile(profileId);
       if (pluginId === "siyuan_builtin_editing") {
@@ -789,20 +825,26 @@ export class ApiSwitchCore {
 
   private syncBindingsByProfile(profileId: string) {
     const bindings = this.bindingManager.getBindings();
-    for (const pluginId in bindings) {
-      if (bindings[pluginId] === profileId) {
-        const config = this.getBoundSharedConfig(pluginId);
-        this.bindingManager.notifyPluginUpdate(pluginId, config);
+    for (const key in bindings) {
+      if (bindings[key] === profileId) {
+        if (key.includes(":")) {
+          const [pluginId, slotId] = key.split(":");
+          const config = this.getBoundSharedConfig(pluginId, slotId);
+          this.bindingManager.notifyPluginUpdate(pluginId, config, slotId);
+        } else {
+          const config = this.getBoundSharedConfig(key);
+          this.bindingManager.notifyPluginUpdate(key, config);
 
-        const profile = this.profileStore.getProfile(profileId);
-        if (pluginId === "siyuan_builtin_editing") {
-          this.updateSiyuanSystemAi(profile, "editing");
-        } else if (pluginId === "siyuan_builtin_agent") {
-          this.updateSiyuanSystemAi(profile, "agent");
-        } else if (pluginId === "siyuan_builtin_decision") {
-          this.updateSiyuanSystemAi(profile, "decision");
-        } else if (pluginId === "siyuan_builtin") {
-          this.updateSiyuanSystemAi(profile, "all");
+          const profile = this.profileStore.getProfile(profileId);
+          if (key === "siyuan_builtin_editing") {
+            this.updateSiyuanSystemAi(profile, "editing");
+          } else if (key === "siyuan_builtin_agent") {
+            this.updateSiyuanSystemAi(profile, "agent");
+          } else if (key === "siyuan_builtin_decision") {
+            this.updateSiyuanSystemAi(profile, "decision");
+          } else if (key === "siyuan_builtin") {
+            this.updateSiyuanSystemAi(profile, "all");
+          }
         }
       }
     }
@@ -824,14 +866,46 @@ export class ApiSwitchCore {
           matchedProfileName = match.profile.name;
         }
       }
+
+      let slotInfos: RegisteredPluginSlotInfo[] | undefined = undefined;
+      if (reg.slots && reg.slots.length > 0) {
+        slotInfos = reg.slots.map((s) => {
+          const slotBoundId = bindings[`${pluginId}:${s.id}`] || "";
+          let slotMatchedId: string | undefined = undefined;
+          let slotMatchedName: string | undefined = undefined;
+          if (!slotBoundId && s.localConfig) {
+            const match = this.findMatchingProfile(s.localConfig);
+            if (match) {
+              slotMatchedId = match.profile.id;
+              slotMatchedName = match.profile.name;
+            }
+          }
+          return {
+            slotId: s.id,
+            name: s.name,
+            description: s.description,
+            isBound: Boolean(slotBoundId),
+            boundProfileId: slotBoundId,
+            localConfig: s.localConfig,
+            matchedProfileId: slotMatchedId,
+            matchedProfileName: slotMatchedName,
+          };
+        });
+      }
+
+      const isAnySlotBound = slotInfos && slotInfos.length > 0
+        ? slotInfos.some((s) => s.isBound)
+        : Boolean(boundId);
+
       list.push({
         pluginId,
         displayName: reg.displayName,
-        isBound: Boolean(boundId),
+        isBound: isAnySlotBound,
         boundProfileId: boundId,
         localConfig: reg.localConfig,
         matchedProfileId,
         matchedProfileName,
+        slots: slotInfos,
       });
     }
 
@@ -915,7 +989,7 @@ export class ApiSwitchCore {
   }
 
   // 从本地配置一键导入为 Profile 并自动绑定（先校验是否已有匹配配置，避免生成重复配置）
-  async importLocalConfigToProfile(pluginId: string): Promise<{
+  async importLocalConfigToProfile(pluginId: string, slotId?: string): Promise<{
     action: "reused" | "created";
     profile: ApiProfile;
     pluginId: string;
@@ -926,14 +1000,31 @@ export class ApiSwitchCore {
 
     const regPlugins = this.getRegisteredPlugins();
     const targetPlug = regPlugins.find((p) => p.pluginId === pluginId);
-    if (targetPlug && targetPlug.localConfig) {
-      lc = targetPlug.localConfig;
-      displayName = targetPlug.displayName;
-    } else {
+    if (targetPlug) {
+      if (slotId && targetPlug.slots) {
+        const targetSlot = targetPlug.slots.find((s) => s.slotId === slotId);
+        if (targetSlot && targetSlot.localConfig) {
+          lc = targetSlot.localConfig;
+          displayName = `${targetPlug.displayName} - ${targetSlot.name}`;
+        }
+      } else if (targetPlug.localConfig) {
+        lc = targetPlug.localConfig;
+        displayName = targetPlug.displayName;
+      }
+    }
+    if (!lc) {
       const reg = this.bindingManager.getRegistration(pluginId);
-      if (reg && reg.localConfig) {
-        lc = reg.localConfig;
-        displayName = reg.displayName;
+      if (reg) {
+        if (slotId && reg.slots) {
+          const targetSlot = reg.slots.find((s) => s.id === slotId);
+          if (targetSlot && targetSlot.localConfig) {
+            lc = targetSlot.localConfig;
+            displayName = `${reg.displayName} - ${targetSlot.name}`;
+          }
+        } else if (reg.localConfig) {
+          lc = reg.localConfig;
+          displayName = reg.displayName;
+        }
       }
     }
 
@@ -943,8 +1034,8 @@ export class ApiSwitchCore {
     const match = this.findMatchingProfile(lc);
     if (match) {
       const matchedProfile = match.profile;
-      await this.bindPlugin(pluginId, matchedProfile.id);
-      this.log(`Matched existing profile '${matchedProfile.name}' for ${pluginId}, reused without duplication.`);
+      await this.bindPlugin(pluginId, matchedProfile.id, slotId);
+      this.log(`Matched existing profile '${matchedProfile.name}' for ${pluginId}${slotId ? `:${slotId}` : ""}, reused without duplication.`);
       return {
         action: "reused",
         profile: matchedProfile,
@@ -1001,8 +1092,8 @@ export class ApiSwitchCore {
       providerUrl: "",
     });
 
-    await this.bindPlugin(pluginId, newProfile.id);
-    this.log(`Imported local config from ${pluginId} to new profile: ${profileName}`);
+    await this.bindPlugin(pluginId, newProfile.id, slotId);
+    this.log(`Imported local config from ${pluginId}${slotId ? `:${slotId}` : ""} to new profile: ${profileName}`);
     return {
       action: "created",
       profile: newProfile,
@@ -1015,14 +1106,27 @@ export class ApiSwitchCore {
   async applyProfileToAllPlugins(profileId: string) {
     if (!profileId) return;
 
-    const allPluginIds = [
-      ...this.bindingManager.getRegistrations().keys(),
+    for (const [pluginId, reg] of this.bindingManager.getRegistrations().entries()) {
+      if (reg.slots && reg.slots.length > 0) {
+        for (const s of reg.slots) {
+          this.bindingManager.setBinding(pluginId, profileId, s.id);
+          const config = this.getBoundSharedConfig(pluginId, s.id);
+          this.bindingManager.notifyPluginUpdate(pluginId, config, s.id);
+        }
+      } else {
+        this.bindingManager.setBinding(pluginId, profileId);
+        const config = this.getBoundSharedConfig(pluginId);
+        this.bindingManager.notifyPluginUpdate(pluginId, config);
+      }
+    }
+
+    const builtinIds = [
       "siyuan_builtin_editing",
       "siyuan_builtin_agent",
       "siyuan_builtin_decision",
     ];
 
-    for (const pluginId of allPluginIds) {
+    for (const pluginId of builtinIds) {
       this.bindingManager.setBinding(pluginId, profileId);
       const config = this.getBoundSharedConfig(pluginId);
       this.bindingManager.notifyPluginUpdate(pluginId, config);
@@ -1034,8 +1138,6 @@ export class ApiSwitchCore {
         await this.updateSiyuanSystemAi(profile, "agent");
       } else if (pluginId === "siyuan_builtin_decision") {
         await this.updateSiyuanSystemAi(profile, "decision");
-      } else if (pluginId === "siyuan_builtin") {
-        await this.updateSiyuanSystemAi(profile, "all");
       }
     }
 

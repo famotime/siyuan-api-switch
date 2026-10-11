@@ -118,16 +118,43 @@ export interface SiyuanAiJson {
   };
 }
 
+export interface PluginSlotDefinition {
+  id: string;               // 槽位唯一标识，例如 "chat" | "decision"
+  name: string;             // 槽位显示名称，例如 "对话模型" | "决策模型"
+  description?: string;     // 槽位说明
+  localConfig?: Omit<SharedConfig, "profileId" | "profileName">; // 本地初始降级配置
+}
+
+export interface RegisteredPluginSlotInfo {
+  slotId: string;
+  name: string;
+  description?: string;
+  isBound: boolean;
+  boundProfileId: string;
+  localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
+  matchedProfileId?: string;
+  matchedProfileName?: string;
+}
+
+export interface RegisterPluginOptions {
+  pluginId: string;
+  displayName: string;
+  callback: (config: SharedConfig | null, slotId?: string) => void;
+  slots?: PluginSlotDefinition[];
+  localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
+}
+
 export interface SiyuanApiSwitch {
   version: string;
   register(
-    pluginId: string,
-    displayName: string,
-    callback: (config: SharedConfig | null) => void,
-    localConfig?: Omit<SharedConfig, "profileId" | "profileName">
+    pluginIdOrOptions: string | RegisterPluginOptions,
+    displayName?: string,
+    callback?: (config: SharedConfig | null, slotId?: string) => void,
+    localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
+    options?: { slots?: PluginSlotDefinition[] }
   ): void;
   unregister(pluginId: string): void;
-  getBoundConfig(pluginId: string): SharedConfig | null;
+  getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
 }
 
 export enum SyFrontendTypes {

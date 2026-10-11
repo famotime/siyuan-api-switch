@@ -1,4 +1,6 @@
-import { SharedConfig } from "@/types";
+import { SharedConfig, PluginSlotDefinition, RegisteredPluginSlotInfo } from "@/types";
+
+export type { PluginSlotDefinition, RegisteredPluginSlotInfo };
 
 export interface RegisteredPluginInfo {
   pluginId: string;
@@ -8,16 +10,18 @@ export interface RegisteredPluginInfo {
   localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
   matchedProfileId?: string;
   matchedProfileName?: string;
+  slots?: RegisteredPluginSlotInfo[];
 }
 
 export interface PluginRegistration {
   displayName: string;
-  callback: (config: SharedConfig | null) => void;
+  callback: (config: SharedConfig | null, slotId?: string) => void;
   localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
+  slots?: PluginSlotDefinition[];
 }
 
 export class PluginBindingManager {
-  private bindings: Record<string, string> = {}; // pluginId -> profileId
+  private bindings: Record<string, string> = {}; // pluginId 或 pluginId:slotId -> profileId
   private registrations = new Map<string, PluginRegistration>();
   private log: (msg: string, ...args: any[]) => void;
   private logError: (msg: string, ...args: any[]) => void;
@@ -38,16 +42,33 @@ export class PluginBindingManager {
     return this.bindings;
   }
 
-  getBoundProfileId(pluginId: string): string | undefined {
+  getBoundProfileId(pluginId: string, slotId?: string): string | undefined {
+    if (slotId) {
+      return this.bindings[`${pluginId}:${slotId}`] || this.bindings[pluginId];
+    }
     return this.bindings[pluginId];
   }
 
-  removeBinding(pluginId: string) {
-    delete this.bindings[pluginId];
+  removeBinding(pluginId: string, slotId?: string) {
+    if (slotId) {
+      delete this.bindings[`${pluginId}:${slotId}`];
+    } else {
+      delete this.bindings[pluginId];
+      // 清理该插件关联的所有槽位键
+      for (const k of Object.keys(this.bindings)) {
+        if (k.startsWith(`${pluginId}:`)) {
+          delete this.bindings[k];
+        }
+      }
+    }
   }
 
-  setBinding(pluginId: string, profileId: string) {
-    this.bindings[pluginId] = profileId;
+  setBinding(pluginId: string, profileId: string, slotId?: string) {
+    if (slotId) {
+      this.bindings[`${pluginId}:${slotId}`] = profileId;
+    } else {
+      this.bindings[pluginId] = profileId;
+    }
   }
 
   getRegistrations(): Map<string, PluginRegistration> {
@@ -65,15 +86,34 @@ export class PluginBindingManager {
   registerPlugin(
     pluginId: string,
     displayName: string,
-    callback: (config: SharedConfig | null) => void,
+    callback: (config: SharedConfig | null, slotId?: string) => void,
     localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
-    initialConfig?: SharedConfig | null
+    initialConfig?: SharedConfig | null,
+    slots?: PluginSlotDefinition[],
+    initialSlotConfigs?: Record<string, SharedConfig | null>
   ) {
-    this.registrations.set(pluginId, { displayName, callback, localConfig });
-    this.log(`Plugin registered: ${displayName} (${pluginId})`, localConfig ? "with local config" : "without local config");
+    this.registrations.set(pluginId, { displayName, callback, localConfig, slots });
+    this.log(
+      `Plugin registered: ${displayName} (${pluginId})`,
+      slots && slots.length > 0
+        ? `with ${slots.length} slots`
+        : localConfig
+        ? "with local config"
+        : "without local config"
+    );
 
     try {
-      callback(initialConfig || null);
+      if (slots && slots.length > 0) {
+        for (const slot of slots) {
+          const cfg =
+            initialSlotConfigs && initialSlotConfigs[slot.id] !== undefined
+              ? initialSlotConfigs[slot.id]
+              : initialConfig ?? null;
+          callback(cfg, slot.id);
+        }
+      } else {
+        callback(initialConfig || null);
+      }
     } catch (err) {
       this.logError(`Error during initial register callback for ${pluginId}`, err);
     }
@@ -84,12 +124,16 @@ export class PluginBindingManager {
     this.log(`Plugin unregistered: ${pluginId}`);
   }
 
-  notifyPluginUpdate(pluginId: string, config: SharedConfig | null) {
+  notifyPluginUpdate(pluginId: string, config: SharedConfig | null, slotId?: string) {
     const reg = this.registrations.get(pluginId);
     if (reg) {
       try {
-        reg.callback(config);
-        this.log(`Notified plugin ${pluginId} with config update`);
+        if (slotId !== undefined) {
+          reg.callback(config, slotId);
+        } else {
+          reg.callback(config);
+        }
+        this.log(`Notified plugin ${pluginId}${slotId ? ` (slot: ${slotId})` : ""} with config update`);
       } catch (err) {
         this.logError(`Failed to notify plugin ${pluginId}`, err);
       }
@@ -99,7 +143,13 @@ export class PluginBindingManager {
   destroy() {
     for (const [pluginId, reg] of this.registrations.entries()) {
       try {
-        reg.callback(null);
+        if (reg.slots && reg.slots.length > 0) {
+          for (const s of reg.slots) {
+            reg.callback(null, s.id);
+          }
+        } else {
+          reg.callback(null);
+        }
       } catch (err) {
         this.logError(`Error in callback during destroy for ${pluginId}`, err);
       }
