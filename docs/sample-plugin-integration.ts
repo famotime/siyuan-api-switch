@@ -1,7 +1,8 @@
 /**
  * @file sample-plugin-integration.ts
- * @description API 旋钮 (siyuan-api-switch) 集成示例代码
- * 开发者可直接将此模板复制到插件项目中，参考进行集成。
+ * @description API 旋钮 (siyuan-api-switch) 第三方插件集成示例代码
+ * 包含单模型接管与多模型槽位（Multi-Slot）接管两套完整示例。
+ * 开发者可直接参考或复制相关逻辑到插件项目中。
  */
 
 import { Plugin } from "siyuan";
@@ -19,24 +20,45 @@ export interface SharedConfig {
   apiKey: string;                // API Key / Token
   model: string;                 // 启用的模型 ID
   models?: string[];             // 候选模型列表
+  protocol?: string;             // 通信协议（"openai" | "gemini" | "anthropic"）
   requestTimeoutSeconds?: number;// 请求超时时间（秒）
   temperature?: number;          // 采样温度
   maxTokens?: number;            // 最大 Token
+  headers?: Record<string, string>; // 自定义 HTTP 请求头（网关鉴权）
+  isDecisionModel?: boolean;     // 是否为决策/判别模型
   memo?: string;                 // 备注说明
   providerUrl?: string;          // 厂商链接
+}
+
+/** 插件多模型槽位定义 */
+export interface PluginSlotDefinition {
+  id: string;                    // 槽位唯一标识，例如 "chat" | "decision"
+  name: string;                  // 槽位显示名称，例如 "对话模型" | "决策模型"
+  description?: string;          // 槽位详细说明
+  localConfig?: Omit<SharedConfig, "profileId" | "profileName">; // 本地降级配置
+}
+
+/** 插件注册参数对象 */
+export interface RegisterPluginOptions {
+  pluginId: string;
+  displayName: string;
+  callback: (config: SharedConfig | null, slotId?: string) => void;
+  slots?: PluginSlotDefinition[];
+  localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
 }
 
 /** API 旋钮挂载在 window 上的全局对象类型 */
 export interface SiyuanApiSwitch {
   version: string;
   register(
-    pluginId: string,
-    displayName: string,
-    callback: (config: SharedConfig | null) => void,
-    localConfig?: Omit<SharedConfig, "profileId" | "profileName">
+    pluginIdOrOptions: string | RegisterPluginOptions,
+    displayName?: string,
+    callback?: (config: SharedConfig | null, slotId?: string) => void,
+    localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
+    options?: { slots?: PluginSlotDefinition[] }
   ): void;
   unregister(pluginId: string): void;
-  getBoundConfig(pluginId: string): SharedConfig | null;
+  getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
 }
 
 // 扩展全局 window 类型
@@ -54,16 +76,16 @@ export interface PluginAiConfig {
   timeout?: number;
   temperature?: number;
   maxTokens?: number;
+  headers?: Record<string, string>;
   isAiManaged?: boolean;
   aiManagedProfileName?: string;
 }
 
 // ============================================================================
-// 2. 插件生命周期集成类示例
+// 2. 插件示例类 A：极简单模型接管
 // ============================================================================
 
-export class SamplePluginWithApiSwitch extends Plugin {
-  // 本地配置对象
+export class SampleSingleSlotPlugin extends Plugin {
   public config: PluginAiConfig = {
     baseUrl: "https://api.openai.com/v1",
     apiKey: "",
@@ -75,53 +97,41 @@ export class SamplePluginWithApiSwitch extends Plugin {
     aiManagedProfileName: undefined,
   };
 
-  // 接管状态与备份
   private isManaged = false;
   private localAiConfigBackup: PluginAiConfig | null = null;
   public managedConfig: SharedConfig | null = null;
 
   async onload() {
-    // 初始化同步与注册
     this.initApiSwitchSync();
   }
 
   onunload() {
-    // 卸载插件时主动取消注册
     if (window.siyuanApiSwitch) {
       window.siyuanApiSwitch.unregister(this.name);
     }
   }
 
-  /**
-   * 核心注册与事件同步方法
-   */
   private initApiSwitchSync() {
-    // 配置变更通知回调
     const syncCallback = (shared: SharedConfig | null) => {
       if (shared) {
-        // 首次被接管时，备份本地配置，用于未来解绑恢复
         if (!this.isManaged) {
           this.localAiConfigBackup = { ...this.config };
           this.isManaged = true;
         }
 
         this.managedConfig = shared;
-
-        // 写入当前配置
         this.config.baseUrl = shared.baseUrl;
         this.config.apiKey = shared.apiKey;
         this.config.model = shared.model;
         if (shared.requestTimeoutSeconds !== undefined) this.config.timeout = shared.requestTimeoutSeconds;
         if (shared.temperature !== undefined) this.config.temperature = shared.temperature;
         if (shared.maxTokens !== undefined) this.config.maxTokens = shared.maxTokens;
-        
+        this.config.headers = shared.headers;
         this.config.isAiManaged = true;
         this.config.aiManagedProfileName = shared.profileName;
 
-        // 刷新已打开的 UI 界面
         this.notifySettingsUiUpdate(shared);
       } else {
-        // 解除接管，平滑还原为本地备份
         if (this.isManaged && this.localAiConfigBackup) {
           this.config = { ...this.localAiConfigBackup };
           this.localAiConfigBackup = null;
@@ -136,7 +146,6 @@ export class SamplePluginWithApiSwitch extends Plugin {
       }
     };
 
-    // 抓取当前可供 API 旋钮一键导入的本地快照
     const activeLocal = this.isManaged ? this.localAiConfigBackup : this.config;
     const localSnapshot = {
       provider: "custom",
@@ -148,25 +157,17 @@ export class SamplePluginWithApiSwitch extends Plugin {
       maxTokens: activeLocal?.maxTokens,
     };
 
-    // 支持两种先后加载顺序的监听挂载
+    const register = () => {
+      window.siyuanApiSwitch?.register(this.name, this.displayName, syncCallback, localSnapshot);
+    };
+
     if (window.siyuanApiSwitch) {
-      window.siyuanApiSwitch.register(this.name, this.displayName, syncCallback, localSnapshot);
+      register();
     } else {
-      window.addEventListener(
-        "siyuan-api-switch:ready",
-        () => {
-          if (window.siyuanApiSwitch) {
-            window.siyuanApiSwitch.register(this.name, this.displayName, syncCallback, localSnapshot);
-          }
-        },
-        { once: true }
-      );
+      window.addEventListener("siyuan-api-switch:ready", register, { once: true });
     }
   }
 
-  /**
-   * 模拟更新 UI 设置面板的方法（Vue / React / DOM 驱动）
-   */
   private notifySettingsUiUpdate(shared: SharedConfig | null) {
     const rootEl = document.getElementById("my-plugin-settings-root");
     if (rootEl) {
@@ -175,7 +176,7 @@ export class SamplePluginWithApiSwitch extends Plugin {
   }
 
   /**
-   * 获取当前生效的 AI API 配置（供发起 HTTP 请求时使用）
+   * 发起请求时获取生效配置，务必合并 headers
    */
   public getEffectiveAiConfig() {
     if (this.managedConfig) {
@@ -186,6 +187,7 @@ export class SamplePluginWithApiSwitch extends Plugin {
         timeout: (this.managedConfig.requestTimeoutSeconds ?? 30) * 1000,
         temperature: this.managedConfig.temperature ?? 0.7,
         maxTokens: this.managedConfig.maxTokens ?? 4096,
+        headers: this.managedConfig.headers || {},
         isManaged: true,
       };
     }
@@ -196,34 +198,121 @@ export class SamplePluginWithApiSwitch extends Plugin {
       timeout: (this.config.timeout ?? 30) * 1000,
       temperature: this.config.temperature ?? 0.7,
       maxTokens: this.config.maxTokens ?? 4096,
+      headers: this.config.headers || {},
       isManaged: false,
     };
   }
 }
 
 // ============================================================================
-// 3. 原生 DOM 设置面板操控辅助函数
+// 3. 插件示例类 B：多模型槽位（Multi-Slot）复合接管
 // ============================================================================
 
-/**
- * 为原生 HTML 设置面板动态挂载/卸载接管横幅与置灰输入框
- */
+export class SampleMultiSlotPlugin extends Plugin {
+  public managedSlots: Record<string, SharedConfig | null> = {
+    chat: null,
+    decision: null,
+  };
+
+  async onload() {
+    this.initMultiSlotSync();
+  }
+
+  onunload() {
+    window.siyuanApiSwitch?.unregister(this.name);
+  }
+
+  private initMultiSlotSync() {
+    const syncCallback = (shared: SharedConfig | null, slotId?: string) => {
+      const slotKey = slotId || "chat";
+      this.managedSlots[slotKey] = shared;
+      // 触发 UI 刷新
+    };
+
+    const options: RegisterPluginOptions = {
+      pluginId: this.name,
+      displayName: this.displayName,
+      callback: syncCallback,
+      slots: [
+        {
+          id: "chat",
+          name: "主对话模型",
+          description: "用于长文撰写与卡片内容生成",
+          localConfig: {
+            provider: "custom",
+            baseUrl: "https://api.openai.com/v1",
+            apiKey: "",
+            model: "gpt-4o",
+          },
+        },
+        {
+          id: "decision",
+          name: "决策与分类模型",
+          description: "用于轻量意图分类与关键词打标",
+          localConfig: {
+            provider: "custom",
+            baseUrl: "https://api.deepseek.com",
+            apiKey: "",
+            model: "deepseek-chat",
+          },
+        },
+      ],
+    };
+
+    const register = () => {
+      window.siyuanApiSwitch?.register(options);
+    };
+
+    if (window.siyuanApiSwitch) {
+      register();
+    } else {
+      window.addEventListener("siyuan-api-switch:ready", register, { once: true });
+    }
+  }
+
+  /**
+   * 发起请求时合并自定义 Headers 的标准模式
+   */
+  public async sendRequest(slotId: "chat" | "decision", messages: any[]) {
+    const config = this.managedSlots[slotId];
+    if (!config) throw new Error(`Slot ${slotId} is not configured`);
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+      ...(config.headers || {}), // 合并自定义 Headers
+    };
+
+    return await fetch(`${config.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: config.temperature ?? 0.7,
+        max_tokens: config.maxTokens ?? 4096,
+      }),
+    });
+  }
+}
+
+// ============================================================================
+// 4. 原生 DOM 设置面板操控辅助函数
+// ============================================================================
+
 export function applyManagedStylesToPanel(panelElement: HTMLElement, shared: SharedConfig | null) {
   const existingTip = panelElement.querySelector(".api-switch-managed-tip");
   if (existingTip) {
     existingTip.remove();
   }
 
-  // 假设所有 AI 输入框均带有 [data-ai-field] 标记
   const aiInputs = panelElement.querySelectorAll<HTMLInputElement | HTMLSelectElement>("[data-ai-field]");
 
   if (shared) {
-    // 1. 置灰禁用输入框
     aiInputs.forEach((input) => {
       input.disabled = true;
     });
 
-    // 2. 挂载统一接管横幅
     const tip = document.createElement("div");
     tip.className = "api-switch-managed-tip";
     tip.style.cssText = `
@@ -242,7 +331,6 @@ export function applyManagedStylesToPanel(panelElement: HTMLElement, shared: Sha
     const container = panelElement.querySelector(".ai-fields-container") || panelElement;
     container.insertBefore(tip, container.firstChild);
   } else {
-    // 3. 解除禁用
     aiInputs.forEach((input) => {
       input.disabled = false;
     });
