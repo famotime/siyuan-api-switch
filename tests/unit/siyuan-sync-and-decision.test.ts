@@ -251,4 +251,134 @@ describe("Jev 决策模型与思源内置 AI 配置读取/导入测试", () => {
       expect(editProf?.maxHistoryMessages).toBe(15);
     });
   });
+
+  describe("写回思源系统 AI 配置（仅写回生效接管项与单独写回）", () => {
+    it("未接管任何模块时，批量写回应提示未执行并返回 success: false", async () => {
+      // 没有任何接管绑定
+      (apiSwitchCore as any).bindings = {};
+      const res = await apiSwitchCore.applyToSiyuan("all");
+      expect(res.success).toBe(false);
+      expect(res.appliedScopes.length).toBe(0);
+      expect(res.message).toContain("未接管任何思源原生配置项");
+    });
+
+    it("仅接管编辑器时，批量写回仅写回编辑器，不修改思源原有的智能体与决策模型配置", async () => {
+      let savedAiConfig: any = null;
+      (apiSwitchCore as any).siyuanAdapter.fetchSystemAiConfig = async () => ({
+        providers: [
+          { id: "original_prov", displayName: "Original Provider", baseURL: "https://orig.com", apiKey: "orig-key", models: [{ id: "orig-model", name: "orig-model" }] },
+        ],
+        editing: { modelId: "orig-model", temperature: 0.3 },
+        agent: { modelId: "orig-model", temperature: 0.8 },
+        decision: { enabled: true, endpoint: "https://orig-dec.com", apiKey: "orig-dec-key", name: "orig-dec" },
+      });
+      (apiSwitchCore as any).siyuanAdapter.setSystemAiConfig = async (conf: any) => {
+        savedAiConfig = conf;
+        return true;
+      };
+
+      // 仅接管编辑器
+      const editProfile = await apiSwitchCore.addProfile({
+        name: "我的编辑器专属",
+        provider: "openai",
+        baseUrl: "https://my-openai.com/v1",
+        apiKey: "sk-my-key",
+        model: "gpt-4o",
+        temperature: 0.2,
+      });
+      (apiSwitchCore as any).bindingManager.setBinding("siyuan_builtin_editing", editProfile.id);
+
+      const res = await apiSwitchCore.applyToSiyuan("all");
+      expect(res.success).toBe(true);
+      expect(res.appliedScopes).toEqual(["editing"]);
+      expect(res.skippedScopes).toContain("agent");
+      expect(res.skippedScopes).toContain("decision");
+
+      // 验证 savedAiConfig
+      expect(savedAiConfig).toBeDefined();
+      // 编辑器被更新为新模型
+      expect(savedAiConfig.editing.modelId).toBe("gpt-4o");
+      expect(savedAiConfig.editing.temperature).toBe(0.2);
+
+      // 智能体与决策模型原封不动
+      expect(savedAiConfig.agent.modelId).toBe("orig-model");
+      expect(savedAiConfig.agent.temperature).toBe(0.8);
+      expect(savedAiConfig.decision.name).toBe("orig-dec");
+      expect(savedAiConfig.decision.endpoint).toBe("https://orig-dec.com");
+
+      // 原有 Provider 保持完整，新增或更新了编辑器的 Provider
+      expect(savedAiConfig.providers.some((p: any) => p.id === "original_prov")).toBe(true);
+    });
+
+    it("单独写回智能体：未接管时抛出明确异常；已接管时只更新智能体，不影响其他配置", async () => {
+      // 1. 未接管时抛错
+      (apiSwitchCore as any).bindings = {};
+      await expect(apiSwitchCore.applyToSiyuan("agent")).rejects.toThrow("当前尚未接管思源「智能体」配置");
+
+      // 2. 接管后单独写回
+      let savedAiConfig: any = null;
+      (apiSwitchCore as any).siyuanAdapter.fetchSystemAiConfig = async () => ({
+        providers: [],
+        editing: { modelId: "edit-keep-intact", temperature: 0.1 },
+        agent: { modelId: "agent-old", temperature: 0.5 },
+      });
+      (apiSwitchCore as any).siyuanAdapter.setSystemAiConfig = async (conf: any) => {
+        savedAiConfig = conf;
+        return true;
+      };
+
+      const agentProfile = await apiSwitchCore.addProfile({
+        name: "我的智能体专属",
+        provider: "openai",
+        baseUrl: "https://agent-api.com/v1",
+        apiKey: "sk-agent",
+        model: "claude-3-5-sonnet",
+        temperature: 0.9,
+      });
+      (apiSwitchCore as any).bindingManager.setBinding("siyuan_builtin_agent", agentProfile.id);
+
+      const res = await apiSwitchCore.applyToSiyuan("agent");
+      expect(res.success).toBe(true);
+      expect(res.appliedScopes).toEqual(["agent"]);
+
+      expect(savedAiConfig.agent.modelId).toBe("claude-3-5-sonnet");
+      expect(savedAiConfig.agent.temperature).toBe(0.9);
+      // 编辑器完全保持未受影响
+      expect(savedAiConfig.editing.modelId).toBe("edit-keep-intact");
+      expect(savedAiConfig.editing.temperature).toBe(0.1);
+    });
+
+    it("单独写回决策模型：更新 decision 字段且绝不污染 openAI 字段", async () => {
+      let savedAiConfig: any = null;
+      (apiSwitchCore as any).siyuanAdapter.fetchSystemAiConfig = async () => ({
+        openAI: { apiModel: "original-openai-model", apiKey: "orig-open-key" },
+        decision: { enabled: false, endpoint: "", apiKey: "", name: "" },
+      });
+      (apiSwitchCore as any).siyuanAdapter.setSystemAiConfig = async (conf: any) => {
+        savedAiConfig = conf;
+        return true;
+      };
+
+      const decProfile = await apiSwitchCore.addProfile({
+        name: "我的决策模型",
+        provider: "custom",
+        baseUrl: "https://decision.ai/v1",
+        apiKey: "sk-dec-test",
+        model: "decision-model-v1",
+        isDecisionModel: true,
+      });
+      (apiSwitchCore as any).bindingManager.setBinding("siyuan_builtin_decision", decProfile.id);
+
+      const res = await apiSwitchCore.applyToSiyuan("decision");
+      expect(res.success).toBe(true);
+      expect(savedAiConfig.decision.enabled).toBe(true);
+      expect(savedAiConfig.decision.endpoint).toBe("https://decision.ai/v1");
+      expect(savedAiConfig.decision.apiKey).toBe("sk-dec-test");
+      expect(savedAiConfig.decision.name).toBe("decision-model-v1");
+
+      // 验证 openAI 兼容字段没有被决策模型篡改
+      expect(savedAiConfig.openAI.apiModel).toBe("original-openai-model");
+      expect(savedAiConfig.openAI.apiKey).toBe("orig-open-key");
+    });
+  });
 });

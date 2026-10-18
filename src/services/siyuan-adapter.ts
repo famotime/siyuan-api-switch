@@ -384,17 +384,19 @@ export class SiyuanAdapter {
         }
       }
 
-      // 旧版兼容更新
-      const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
-      aiConfig.openAI = {
-        ...currentOpenAi,
-        apiBaseURL: effective.baseUrl,
-        apiKey: effective.apiKey,
-        apiModel: effective.model,
-        apiTimeout: effective.requestTimeoutSeconds ?? 30,
-        apiTemperature: effective.temperature ?? 0.7,
-        apiMaxTokens: effective.maxTokens ?? 4096,
-      };
+      // 旧版兼容更新（仅在写回编辑器配置时更新原生 openAI 字段，不污染决策模型与智能体）
+      if (targetScope === "editing" || (targetScope === "all" && !effective.isDecisionModel)) {
+        const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
+        aiConfig.openAI = {
+          ...currentOpenAi,
+          apiBaseURL: effective.baseUrl,
+          apiKey: effective.apiKey,
+          apiModel: effective.model,
+          apiTimeout: effective.requestTimeoutSeconds ?? 30,
+          apiTemperature: effective.temperature ?? 0.7,
+          apiMaxTokens: effective.maxTokens ?? 4096,
+        };
+      }
 
       const success = await this.setSystemAiConfig(aiConfig);
       if (success) {
@@ -404,6 +406,178 @@ export class SiyuanAdapter {
       }
     } catch (err) {
       this.logError("Error updating Siyuan system AI", err);
+    }
+  }
+
+  /**
+   * 批量将生效接管的配置项写回思源笔记（仅精准更新已接管项，未接管项保留思源原生配置不变）
+   */
+  async updateSiyuanSystemAiBatch(
+    tasks: {
+      scope: "editing" | "agent" | "decision";
+      effective: ApiProfile;
+    }[]
+  ): Promise<boolean> {
+    if (!tasks || tasks.length === 0) return true;
+
+    try {
+      const currentAi = await this.fetchSystemAiConfig();
+      let aiConfig = JSON.parse(JSON.stringify(currentAi || {}));
+
+      if (typeof aiConfig !== "object" || !aiConfig) {
+        aiConfig = {};
+      }
+      if (!Array.isArray(aiConfig.providers)) {
+        aiConfig.providers = [];
+      }
+
+      for (const task of tasks) {
+        const { scope, effective } = task;
+        if (!effective) continue;
+
+        if (scope === "decision") {
+          if (!aiConfig.decision || typeof aiConfig.decision !== "object") {
+            aiConfig.decision = {};
+          }
+          aiConfig.decision.enabled = true;
+          aiConfig.decision.endpoint = effective.baseUrl || "https://api.typesafe.ai/v1/systemone";
+          aiConfig.decision.apiKey = effective.apiKey || "";
+          aiConfig.decision.name = effective.model || aiConfig.decision.name || "jev-latest";
+          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
+            aiConfig.decision.timeout = effective.requestTimeoutSeconds;
+          }
+        } else if (scope === "editing" || scope === "agent") {
+          const modelId = effective.model || "custom-model";
+          const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
+
+          let targetProvider = aiConfig.providers.find(
+            (p: any) => p.id === providerId || p.displayName === effective.name
+          );
+
+          if (!targetProvider) {
+            targetProvider = {
+              id: providerId,
+              displayName: effective.name || "API Switch Provider",
+              enabled: true,
+              protocol: effective.protocol || effective.provider || "openai",
+              models: [],
+            };
+            aiConfig.providers.push(targetProvider);
+          }
+
+          targetProvider.enabled = true;
+          targetProvider.apiKey = effective.apiKey || "";
+          targetProvider.baseURL = effective.baseUrl || "";
+          targetProvider.baseUrl = effective.baseUrl || "";
+          if (effective.headers) {
+            targetProvider.headers = effective.headers;
+          }
+          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
+            targetProvider.requestTimeout = effective.requestTimeoutSeconds;
+          }
+          if (!targetProvider.protocol) {
+            targetProvider.protocol = effective.protocol || effective.provider || "openai";
+          }
+
+          if (!Array.isArray(targetProvider.models)) {
+            targetProvider.models = [];
+          }
+
+          let targetModel = targetProvider.models.find((m: any) => m.id === modelId || m.name === modelId);
+          if (!targetModel) {
+            targetModel = {
+              id: modelId,
+              name: modelId,
+              displayName: modelId,
+              enabled: true,
+            };
+            targetProvider.models.push(targetModel);
+          } else {
+            targetModel.enabled = true;
+          }
+
+          if (Array.isArray(effective.models)) {
+            for (const mName of effective.models) {
+              if (mName && !targetProvider.models.some((m: any) => m.id === mName || m.name === mName)) {
+                targetProvider.models.push({
+                  id: mName,
+                  name: mName,
+                  displayName: mName,
+                  enabled: true,
+                });
+              }
+            }
+          }
+
+          const targetModelId = targetModel.id || modelId;
+
+          if (scope === "agent") {
+            if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
+              aiConfig.agent = {};
+            }
+            aiConfig.agent.modelId = targetModelId;
+            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
+              aiConfig.agent.temperature = effective.temperature;
+            }
+            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
+              aiConfig.agent.maxCompletionTokens = effective.maxTokens;
+            }
+            if (effective.maxToolCallRounds !== undefined && !isNaN(effective.maxToolCallRounds)) {
+              aiConfig.agent.maxToolCallRounds = effective.maxToolCallRounds;
+            }
+            if (effective.sessionTimeout !== undefined && !isNaN(effective.sessionTimeout)) {
+              aiConfig.agent.sessionTimeout = effective.sessionTimeout;
+            }
+            if (effective.streamIdleTimeout !== undefined && !isNaN(effective.streamIdleTimeout)) {
+              aiConfig.agent.streamIdleTimeout = effective.streamIdleTimeout;
+            }
+            if (effective.confirmTimeout !== undefined && !isNaN(effective.confirmTimeout)) {
+              aiConfig.agent.confirmTimeout = effective.confirmTimeout;
+            }
+            if (effective.maxRetries !== undefined && !isNaN(effective.maxRetries)) {
+              aiConfig.agent.maxRetries = effective.maxRetries;
+            }
+          }
+
+          if (scope === "editing") {
+            if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
+              aiConfig.editing = {};
+            }
+            aiConfig.editing.modelId = targetModelId;
+            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
+              aiConfig.editing.temperature = effective.temperature;
+            }
+            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
+              aiConfig.editing.maxCompletionTokens = effective.maxTokens;
+            }
+            if (effective.maxHistoryMessages !== undefined && !isNaN(effective.maxHistoryMessages)) {
+              aiConfig.editing.maxHistoryMessages = effective.maxHistoryMessages;
+            }
+
+            // 同步旧版兼容字段 openAI
+            const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
+            aiConfig.openAI = {
+              ...currentOpenAi,
+              apiBaseURL: effective.baseUrl,
+              apiKey: effective.apiKey,
+              apiModel: effective.model,
+              apiTimeout: effective.requestTimeoutSeconds ?? 30,
+              apiTemperature: effective.temperature ?? 0.7,
+              apiMaxTokens: effective.maxTokens ?? 4096,
+            };
+          }
+        }
+      }
+
+      const success = await this.setSystemAiConfig(aiConfig);
+      if (success) {
+        this.log(`Successfully batch updated Siyuan system AI for scopes: ${tasks.map(t => t.scope).join(", ")}`);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      this.logError("Error updating Siyuan system AI batch", err);
+      return false;
     }
   }
 

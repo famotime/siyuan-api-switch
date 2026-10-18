@@ -130,7 +130,7 @@
           <li>请求超时时间 (Timeout)</li>
           <li>Temperature 采样温度与 Max Tokens 限制</li>
         </ul>
-        <p class="warning-text">⚠️ 提示：绑定完成后，子插件的 AI 请求将实时重定向至旋钮配置，无需手动重启插件。</p>
+        <p class="warning-text">💡 提示：绑定完成后，AI 请求与思源原生系统配置将自动联动生效，无需手动写回或重启插件。</p>
       </div>
     </div>
   </div>

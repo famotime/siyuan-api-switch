@@ -57,7 +57,17 @@ export default class ApiSwitchPlugin extends Plugin {
     // 初始化 API 旋钮核心
     await apiSwitchCore.initialize(this);
 
-    init(this)
+    init(this);
+
+    // 注册工具栏顶栏图标，点击后打开统一入口
+    this.addTopBar({
+      icon: "iconSparkles",
+      title: "API 旋钮",
+      position: "right",
+      callback: () => {
+        this.openSetting();
+      },
+    });
   }
 
   onunload() {

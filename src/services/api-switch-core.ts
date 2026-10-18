@@ -1,4 +1,4 @@
-import { Plugin, fetchSyncPost } from "siyuan";
+import { Plugin } from "siyuan";
 import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions } from "@/types";
 import { ProviderStore } from "./provider-store";
 import { ProfileStore, ApiProfile } from "./profile-store";
@@ -65,6 +65,10 @@ export class ApiSwitchCore {
   }
   public set bindings(val: Record<string, string>) {
     this.bindingManager.setBindings(val);
+  }
+
+  public getBindings(): Record<string, string> {
+    return this.bindingManager.getBindings();
   }
 
   public get registrations() {
@@ -541,7 +545,7 @@ export class ApiSwitchCore {
             models: [extracted.decision.model || "jev-latest"],
             requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds ?? 30,
             isDecisionModel: true,
-            memo: "从思源笔记「设置-人工智能-决策模型」同步的配置 (Jev模型)",
+            memo: "从思源笔记「设置-人工智能-决策模型」同步的配置",
           });
           this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
           createdProfilesCount++;
@@ -562,91 +566,96 @@ export class ApiSwitchCore {
     }
   }
 
-  // 一键将全量配置（提供商、编辑器、智能体、决策模型）应用到思源笔记本体
+  /**
+   * 将当前生效接管的配置写回思源笔记原生系统
+   * 仅写回生效接管的配置项；编辑器、智能体、决策模型支持单独写回或批量写回
+   * @param scope 'all'（仅写回已生效接管的项）| 'editing' | 'agent' | 'decision'
+   */
+  public async applyToSiyuan(
+    scope: "all" | "editing" | "agent" | "decision" = "all"
+  ): Promise<{
+    success: boolean;
+    appliedScopes: ("editing" | "agent" | "decision")[];
+    skippedScopes: ("editing" | "agent" | "decision")[];
+    message: string;
+  }> {
+    const bindings = this.bindingManager.getBindings();
+
+    const scopeMap: Record<"editing" | "agent" | "decision", { pluginId: string; name: string }> = {
+      editing: { pluginId: "siyuan_builtin_editing", name: "编辑器" },
+      agent: { pluginId: "siyuan_builtin_agent", name: "智能体" },
+      decision: { pluginId: "siyuan_builtin_decision", name: "决策模型" },
+    };
+
+    if (scope !== "all") {
+      const info = scopeMap[scope];
+      const boundId = bindings[info.pluginId];
+      if (!boundId) {
+        throw new Error(`当前尚未接管思源「${info.name}」配置，无法单独写回。请先为其绑定配置。`);
+      }
+      const prof = this.profileStore.getProfile(boundId);
+      if (!prof) {
+        throw new Error(`未找到「${info.name}」绑定的配置 (ID: ${boundId})`);
+      }
+      const effective = this.resolveEffectiveProfile(prof);
+      await this.siyuanAdapter.updateSiyuanSystemAi(effective, scope);
+      return {
+        success: true,
+        appliedScopes: [scope],
+        skippedScopes: (["editing", "agent", "decision"] as const).filter((s) => s !== scope),
+        message: `已成功将「${info.name}」配置单独写回思源笔记原生系统！未接管项保持思源原有配置不变。`,
+      };
+    }
+
+    // scope === "all": 仅写回生效接管的项！
+    const tasks: { scope: "editing" | "agent" | "decision"; effective: ApiProfile }[] = [];
+    const appliedScopes: ("editing" | "agent" | "decision")[] = [];
+    const skippedScopes: ("editing" | "agent" | "decision")[] = [];
+
+    for (const s of ["editing", "agent", "decision"] as const) {
+      const boundId = bindings[scopeMap[s].pluginId];
+      if (boundId) {
+        const prof = this.profileStore.getProfile(boundId);
+        if (prof) {
+          tasks.push({ scope: s, effective: this.resolveEffectiveProfile(prof) });
+          appliedScopes.push(s);
+          continue;
+        }
+      }
+      skippedScopes.push(s);
+    }
+
+    if (tasks.length === 0) {
+      return {
+        success: false,
+        appliedScopes: [],
+        skippedScopes,
+        message: "当前未接管任何思源原生配置项（编辑器/智能体/决策模型），未执行写回。请先在「子插件接管」中绑定配置。",
+      };
+    }
+
+    const ok = await this.siyuanAdapter.updateSiyuanSystemAiBatch(tasks);
+    if (!ok) {
+      throw new Error("写回思源笔记配置失败，请检查思源内核状态");
+    }
+
+    const appliedNames = appliedScopes.map((s) => scopeMap[s].name).join("、");
+    const skippedNames = skippedScopes.map((s) => scopeMap[s].name).join("、");
+    const tip = skippedScopes.length > 0 ? `（未接管项「${skippedNames}」保持原有设置不变）` : "";
+
+    return {
+      success: true,
+      appliedScopes,
+      skippedScopes,
+      message: `已成功将生效接管的【${appliedNames}】写回思源笔记原生系统！${tip}`,
+    };
+  }
+
+  // 兼容原有方法：写回生效接管的项
   public async applyAllToSiyuan(): Promise<void> {
-    try {
-      const confRes = await fetchSyncPost("/api/system/getConf", {});
-      const fullConf = confRes && confRes.code === 0 ? confRes.data : null;
-      let aiConfig = fullConf?.ai || (window as any).siyuan?.config?.ai || {};
-
-      aiConfig = JSON.parse(JSON.stringify(aiConfig));
-
-      // 1. 同步全量 Providers 到思源
-      aiConfig.providers = this.providerStore.getProviders().map((p) => ({
-        id: p.id,
-        displayName: p.displayName,
-        enabled: p.enabled ?? true,
-        baseURL: p.baseUrl,
-        apiKey: p.apiKey,
-        protocol: p.protocol || "openai",
-        requestTimeout: p.requestTimeout ?? 30,
-        headers: p.headers || {},
-        models: (p.models || []).map((m) => ({
-          id: m.id,
-          name: m.name,
-          displayName: m.displayName || m.name,
-          enabled: m.enabled ?? true,
-          contextLength: m.contextLength,
-        })),
-      }));
-
-      // 2. 更新编辑器
-      const bindings = this.bindingManager.getBindings();
-      if (bindings["siyuan_builtin_editing"]) {
-        const prof = this.profileStore.getProfile(bindings["siyuan_builtin_editing"]);
-        if (prof) {
-          const effective = this.resolveEffectiveProfile(prof);
-          if (!aiConfig.editing) aiConfig.editing = {};
-          aiConfig.editing.modelId = effective.model;
-          if (effective.temperature !== undefined) aiConfig.editing.temperature = effective.temperature;
-          if (effective.maxTokens !== undefined) aiConfig.editing.maxCompletionTokens = effective.maxTokens;
-          if (effective.maxHistoryMessages !== undefined) aiConfig.editing.maxHistoryMessages = effective.maxHistoryMessages;
-        }
-      }
-
-      // 3. 更新智能体
-      if (bindings["siyuan_builtin_agent"]) {
-        const prof = this.profileStore.getProfile(bindings["siyuan_builtin_agent"]);
-        if (prof) {
-          const effective = this.resolveEffectiveProfile(prof);
-          if (!aiConfig.agent) aiConfig.agent = {};
-          aiConfig.agent.modelId = effective.model;
-          if (effective.temperature !== undefined) aiConfig.agent.temperature = effective.temperature;
-          if (effective.maxTokens !== undefined) aiConfig.agent.maxCompletionTokens = effective.maxTokens;
-          if (effective.maxToolCallRounds !== undefined) aiConfig.agent.maxToolCallRounds = effective.maxToolCallRounds;
-          if (effective.sessionTimeout !== undefined) aiConfig.agent.sessionTimeout = effective.sessionTimeout;
-          if (effective.streamIdleTimeout !== undefined) aiConfig.agent.streamIdleTimeout = effective.streamIdleTimeout;
-          if (effective.confirmTimeout !== undefined) aiConfig.agent.confirmTimeout = effective.confirmTimeout;
-          if (effective.maxRetries !== undefined) aiConfig.agent.maxRetries = effective.maxRetries;
-        }
-      }
-
-      // 4. 更新决策模型
-      if (bindings["siyuan_builtin_decision"]) {
-        const prof = this.profileStore.getProfile(bindings["siyuan_builtin_decision"]);
-        if (prof) {
-          const effective = this.resolveEffectiveProfile(prof);
-          if (!aiConfig.decision) aiConfig.decision = {};
-          aiConfig.decision.enabled = true;
-          aiConfig.decision.endpoint = effective.baseUrl;
-          aiConfig.decision.apiKey = effective.apiKey;
-          aiConfig.decision.name = effective.model;
-          if (effective.requestTimeoutSeconds !== undefined) aiConfig.decision.timeout = effective.requestTimeoutSeconds;
-        }
-      }
-
-      const res = await fetchSyncPost("/api/setting/setAI", aiConfig);
-      if (res && res.code === 0) {
-        if ((window as any).siyuan?.config) {
-          (window as any).siyuan.config.ai = aiConfig;
-        }
-        this.log("Successfully applied all AI configs to Siyuan system");
-      } else {
-        throw new Error(res?.msg || "调用 setAI 失败");
-      }
-    } catch (err) {
-      this.logError("Failed to apply all configs to Siyuan", err);
-      throw err;
+    const res = await this.applyToSiyuan("all");
+    if (!res.success && res.appliedScopes.length === 0) {
+      throw new Error(res.message);
     }
   }
 
@@ -809,7 +818,7 @@ export class ApiSwitchCore {
             models: [decModel],
             requestTimeoutSeconds: realAi.decision.timeout ?? realAi.decision.requestTimeoutSeconds ?? 30,
             isDecisionModel: true,
-            memo: "从原生 ai.json 导入的决策模型配置 (Jev模型)",
+            memo: "从原生 ai.json 导入的决策模型配置",
           };
           let exist = this.profileStore.getProfiles().find((p) => p.name === "导入-思源决策模型" || p.isDecisionModel);
           if (exist) {

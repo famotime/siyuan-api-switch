@@ -32,19 +32,6 @@
                 </svg>
                 <span>读取思源配置</span>
               </button>
-              <button 
-                class="header-sync-btn header-sync-btn--write" 
-                @click="applyAllToSiyuanAction" 
-                data-tooltip="一键将全量配置写回思源笔记" 
-                data-tooltip-position="bottom"
-              >
-                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <span>写回思源</span>
-              </button>
             </div>
 
             <!-- 分割线 -->
@@ -158,7 +145,7 @@
                     <div class="profile-item-meta">
                       <div class="profile-item-name">
                         <span>{{ prof.name }}</span>
-                        <span v-if="prof.isDecisionModel" class="profile-badge decision-badge">Jev 决策模型</span>
+                        <span v-if="prof.isDecisionModel" class="profile-badge decision-badge">决策模型</span>
                         <span v-else-if="prof.name.includes('编辑器')" class="profile-badge builtin-badge">思源编辑器</span>
                         <span v-else-if="prof.name.includes('智能体')" class="profile-badge builtin-badge">思源智能体</span>
                       </div>
@@ -295,7 +282,7 @@
     <div class="confirm-overlay" v-if="confirmDialog.show" @click.self="closeConfirm(false)">
       <div class="confirm-dialog animate-fade-in">
         <div class="confirm-title">{{ confirmDialog.title }}</div>
-        <div class="confirm-text">{{ confirmDialog.text }}</div>
+        <div class="confirm-text" style="white-space: pre-line;">{{ confirmDialog.text }}</div>
         <div class="confirm-actions">
           <button class="b3-button b3-button--cancel" @click="closeConfirm(false)">取消</button>
           <button class="b3-button b3-button--primary" @click="closeConfirm(true)">确定</button>
@@ -722,17 +709,6 @@ const syncFromSiyuanAction = async () => {
   }
 }
 
-const applyAllToSiyuanAction = async () => {
-  showCustomConfirm("写回思源笔记", "确定要将 API 旋钮中的全量提供商与场景配置写回思源笔记原生系统吗？", async () => {
-    try {
-      await apiSwitchCore.applyAllToSiyuan()
-      showMessage("全量配置已成功写回思源笔记原生系统！", 4000, "info")
-    } catch (err: any) {
-      showMessage(`写回思源失败: ${err?.message || err}`, 5000, "error")
-    }
-  })
-}
-
 // 思源笔记快捷导入检测
 const hasSiyuanBuiltInAi = computed(() => {
   try {
@@ -783,7 +759,7 @@ const getProfileDisplaySub = (prof: ApiProfile) => {
     provName = getProviderName(prof.provider)
   }
   if (prof.isDecisionModel && (!provName || provName === "未知" || provName === "自定义")) {
-    provName = "Jev 决策模型"
+    provName = "决策模型"
   }
   return `${provName || "未知"} | ${prof.model || "未设模型"}`
 }

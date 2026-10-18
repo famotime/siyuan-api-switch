@@ -147,23 +147,6 @@
         }
       }
     }
-
-    /* 写回思源：主色实心高亮按钮（保持高对比度白字） */
-    &--write {
-      background-color: var(--b3-theme-primary);
-      border: 1.5px solid var(--b3-theme-primary);
-      color: var(--b3-theme-on-primary, #ffffff);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-
-      &:hover {
-        filter: brightness(1.1);
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
-
-        svg {
-          transform: translateY(-1px);
-        }
-      }
-    }
   }
 
   .header-divider {
