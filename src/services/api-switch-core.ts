@@ -5,6 +5,7 @@ import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
+import { PRESET_PROVIDERS } from "@/constants/providers";
 
 export type { ApiProfile } from "./profile-store";
 export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo } from "./plugin-binding-manager";
@@ -13,6 +14,38 @@ export { extractSiyuanAiSettings };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
 export { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
+export { PRESET_PROVIDERS };
+
+export interface AutoProviderResult {
+  provider: ApiProvider;
+  action: "created" | "reused";
+}
+
+/**
+ * 判断 Profile 是否满足自动生成/关联对应 AI 提供商的条件：
+ * 1. 尚未绑定 providerId
+ * 2. 属于非 custom 服务商且非纯自定义决策模型
+ * 3. 具备有效的 API Key（非空）
+ * 4. 具备 Base URL（或有官方预设默认地址可自动回退补齐）
+ */
+export function shouldAutoGenerateProvider(profile: Partial<ApiProfile>): boolean {
+  if (!profile) return false;
+  if (profile.providerId) return false;
+  if (profile.isDecisionModel && (profile.provider === "custom" || profile.protocol === "custom")) {
+    return false;
+  }
+  const provKey = (profile.provider || "").trim().toLowerCase();
+  if (!provKey || provKey === "custom") return false;
+
+  const apiKey = (profile.apiKey || "").trim();
+  if (!apiKey) return false;
+
+  const baseUrl = (profile.baseUrl || "").trim() || PRESET_PROVIDERS[provKey]?.defaultBaseUrl;
+  if (!baseUrl) return false;
+
+  return true;
+}
+
 
 export interface ApiSwitchStorage {
   providers?: ApiProvider[];
@@ -94,6 +127,9 @@ export class ApiSwitchCore {
     this.plugin = plugin;
     await this.loadData();
     this.mountGlobal();
+
+    // 自动扫描与迁移：对已有配置中符合条件的独立 Profile 自动生成/关联提供商
+    await this.ensureProvidersForProfiles(this.profiles);
 
     // 智能初始化：首次使用或配置为空时，自动从思源笔记检测并导入
     if (this.profiles.length === 0 && this.providers.length === 0) {
@@ -329,17 +365,164 @@ export class ApiSwitchCore {
     return this.profileStore.getProfile(id);
   }
 
+  /**
+   * 为合法且非 custom 的独立 Profile 自动生成或复用对应的 AI 提供商：
+   * 1. 优先复用相同 BaseURL 与 API Key 的已有提供商，并追加合并模型
+   * 2. 若无则新建标准官方命名的提供商，并补充推荐模型池
+   * 3. 原 Profile 自动绑定 providerId 并清空冗余 baseUrl/apiKey
+   */
+  public async ensureProviderForProfile(
+    profile: ApiProfile
+  ): Promise<AutoProviderResult | null> {
+    if (!shouldAutoGenerateProvider(profile)) return null;
+
+    const provKey = (profile.provider || "").trim().toLowerCase();
+    const preset = PRESET_PROVIDERS[provKey];
+    const effectiveBaseUrl = (profile.baseUrl || "").trim() || preset?.defaultBaseUrl || "";
+    const effectiveApiKey = (profile.apiKey || "").trim();
+    const protocol = profile.protocol || preset?.protocol || "openai";
+
+    // 收集所有候选模型去重
+    const modelSet = new Set<string>();
+    if (profile.model) modelSet.add(profile.model.trim());
+    if (Array.isArray(profile.models)) {
+      profile.models.forEach((m) => m && modelSet.add(m.trim()));
+    }
+    if (preset?.presetModels) {
+      preset.presetModels.forEach((m) => modelSet.add(m.trim()));
+    }
+    const allModels = Array.from(modelSet).filter(Boolean);
+
+    // 1. 查找是否已有匹配的提供商（相同的 baseUrl 与 apiKey，且协议兼容）
+    const matched = this.providerStore.findMatchingProvider({
+      baseUrl: effectiveBaseUrl,
+      apiKey: effectiveApiKey,
+      protocol,
+    });
+
+    if (matched) {
+      let changed = false;
+      const existingModels = matched.models ? [...matched.models] : [];
+      for (const m of allModels) {
+        if (!existingModels.some((em) => em.id === m || em.name === m)) {
+          existingModels.push({
+            id: m,
+            name: m,
+            displayName: m,
+            enabled: true,
+          });
+          changed = true;
+        }
+      }
+      if (changed) {
+        matched.models = existingModels;
+        await this.providerStore.updateProvider(matched);
+      }
+      profile.providerId = matched.id;
+      profile.baseUrl = "";
+      profile.apiKey = "";
+      return { provider: matched, action: "reused" };
+    }
+
+    // 2. 无匹配则新建提供商
+    let displayName = preset?.displayName;
+    if (!displayName) {
+      displayName = `${provKey.charAt(0).toUpperCase() + provKey.slice(1)} 官方`;
+    }
+    const currentProviders = this.providerStore.getProviders();
+    let finalName = displayName;
+    let counter = 2;
+    while (currentProviders.some((p) => p.displayName === finalName)) {
+      finalName = `${displayName} (${counter})`;
+      counter++;
+    }
+
+    const newProvider = await this.providerStore.addProvider({
+      displayName: finalName,
+      enabled: true,
+      protocol,
+      baseUrl: effectiveBaseUrl,
+      apiKey: effectiveApiKey,
+      requestTimeout: profile.requestTimeoutSeconds ?? 30,
+      headers: profile.headers || {},
+      models: allModels.map((m) => ({
+        id: m,
+        name: m,
+        displayName: m,
+        enabled: true,
+      })),
+    });
+
+    profile.providerId = newProvider.id;
+    profile.baseUrl = "";
+    profile.apiKey = "";
+    return { provider: newProvider, action: "created" };
+  }
+
+  /**
+   * 批量扫描并确保列表中所有符合条件的 Profile 均关联有对应的 AI 提供商
+   */
+  public async ensureProvidersForProfiles(
+    profilesList?: ApiProfile[]
+  ): Promise<{ createdCount: number; reusedCount: number; affectedProfiles: ApiProfile[] }> {
+    const list = profilesList || this.profileStore.getProfiles();
+    let createdCount = 0;
+    let reusedCount = 0;
+    const affectedProfiles: ApiProfile[] = [];
+
+    for (const prof of list) {
+      const res = await this.ensureProviderForProfile(prof);
+      if (res) {
+        if (res.action === "created") createdCount++;
+        else reusedCount++;
+        affectedProfiles.push(prof);
+      }
+    }
+
+    if (affectedProfiles.length > 0) {
+      await this.save();
+    }
+
+    return { createdCount, reusedCount, affectedProfiles };
+  }
+
   async addProfile(profile: Omit<ApiProfile, "id">): Promise<ApiProfile> {
-    return this.profileStore.addProfile(profile);
+    if (!profile.providerId) {
+      const provKey = (profile.provider || "").trim().toLowerCase();
+      const preset = PRESET_PROVIDERS[provKey];
+      if (!profile.baseUrl && preset?.defaultBaseUrl) {
+        (profile as any).baseUrl = preset.defaultBaseUrl;
+      }
+    }
+
+    const newProfile = await this.profileStore.addProfile(profile);
+    const autoRes = await this.ensureProviderForProfile(newProfile);
+    if (autoRes) {
+      (newProfile as any)._autoProviderResult = autoRes;
+      await this.save();
+    }
+    return newProfile;
   }
 
   async importProfiles(imported: ApiProfile[]): Promise<{ added: number; updated: number }> {
-    return this.profileStore.importProfiles(imported);
+    const res = await this.profileStore.importProfiles(imported);
+    await this.ensureProvidersForProfiles(this.profileStore.getProfiles());
+    return res;
   }
 
-  async updateProfile(profile: ApiProfile): Promise<void> {
+  async updateProfile(profile: ApiProfile): Promise<AutoProviderResult | null> {
+    if (!profile.providerId) {
+      const provKey = (profile.provider || "").trim().toLowerCase();
+      const preset = PRESET_PROVIDERS[provKey];
+      if (!profile.baseUrl && preset?.defaultBaseUrl) {
+        profile.baseUrl = preset.defaultBaseUrl;
+      }
+    }
+
+    const autoRes = await this.ensureProviderForProfile(profile);
     await this.profileStore.updateProfile(profile);
     this.syncBindingsByProfile(profile.id);
+    return autoRes;
   }
 
   async deleteProfile(profileId: string): Promise<void> {
@@ -553,6 +736,7 @@ export class ApiSwitchCore {
       }
 
       this.profileStore.setProfiles(profiles);
+      await this.ensureProvidersForProfiles(profiles);
       await this.save();
       return {
         providersCount: this.providerStore.getProviders().length,
@@ -833,6 +1017,7 @@ export class ApiSwitchCore {
         }
       }
 
+      await this.ensureProvidersForProfiles(this.profileStore.getProfiles());
       await this.save();
       return { providersCount: this.providerStore.getProviders().length, profilesCount: this.profileStore.getProfiles().length };
     } catch (err) {

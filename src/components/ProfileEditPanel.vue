@@ -190,6 +190,7 @@
 import { ref, computed, watch } from "vue";
 import { ApiProfile } from "@/services/api-switch-core";
 import { ApiProvider } from "@/types";
+import { PRESET_PROVIDERS } from "@/constants/providers";
 
 const props = defineProps<{
   profile: ApiProfile;
@@ -209,44 +210,11 @@ const showAdvanced = ref(false);
 const newModelInput = ref("");
 
 const presetModels: Record<string, string[]> = {
-  deepseek: ["deepseek-chat", "deepseek-reasoner"],
-  gemini: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
-  siliconflow: [
-    "deepseek-ai/DeepSeek-V3",
-    "deepseek-ai/DeepSeek-R1",
-    "Qwen/Qwen2.5-72B-Instruct",
-    "THUDM/glm-4-9b-chat",
-    "meta-llama/Meta-Llama-3-8B-Instruct",
-  ],
-  openai: ["gpt-4o-mini", "gpt-4o", "o1-mini", "o3-mini"],
+  deepseek: PRESET_PROVIDERS.deepseek.presetModels,
+  gemini: PRESET_PROVIDERS.gemini.presetModels,
+  siliconflow: PRESET_PROVIDERS.siliconflow.presetModels,
+  openai: PRESET_PROVIDERS.openai.presetModels,
   custom: [],
-};
-
-const providerDefaults: Record<string, { baseUrl: string; model: string; providerUrl?: string }> = {
-  deepseek: {
-    baseUrl: "https://api.deepseek.com",
-    model: "deepseek-chat",
-    providerUrl: "https://platform.deepseek.com/api_keys",
-  },
-  gemini: {
-    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-    model: "gemini-2.5-flash",
-    providerUrl: "https://aistudio.google.com/app/apikey",
-  },
-  siliconflow: {
-    baseUrl: "https://api.siliconflow.cn/v1",
-    model: "deepseek-ai/DeepSeek-V3",
-    providerUrl: "https://cloud.siliconflow.cn/account/ak",
-  },
-  openai: {
-    baseUrl: "https://api.openai.com/v1",
-    model: "gpt-4o-mini",
-    providerUrl: "https://platform.openai.com/api-keys",
-  },
-  custom: {
-    baseUrl: "",
-    model: "",
-  },
 };
 
 watch(
@@ -291,15 +259,17 @@ const onProfileProviderSelect = () => {
 
 const onProviderChange = () => {
   const prov = localProfile.value.provider;
-  const defaults = providerDefaults[prov];
-  if (defaults) {
-    localProfile.value.baseUrl = defaults.baseUrl;
-    localProfile.value.providerUrl = defaults.providerUrl || "";
-    const defaultModels = presetModels[prov] ? [...presetModels[prov]] : [defaults.model];
+  const preset = PRESET_PROVIDERS[prov];
+  if (preset) {
+    localProfile.value.baseUrl = preset.defaultBaseUrl;
+    localProfile.value.providerUrl = preset.providerUrl || "";
+    const defaultModels = preset.presetModels ? [...preset.presetModels] : [preset.defaultModel];
     localProfile.value.models = defaultModels;
     if (!defaultModels.includes(localProfile.value.model)) {
-      localProfile.value.model = defaultModels[0] || defaults.model;
+      localProfile.value.model = defaultModels[0] || preset.defaultModel;
     }
+  } else {
+    localProfile.value.providerUrl = "";
   }
 };
 

@@ -294,7 +294,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings } from "@/services/api-switch-core"
+import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, AutoProviderResult } from "@/services/api-switch-core"
 import { ApiProvider } from "@/types"
 import { showMessage } from "siyuan"
 import { useWindowDrag } from "@/composables/useWindowDrag"
@@ -564,21 +564,40 @@ const saveProfile = async (profileData: ApiProfile) => {
     showMessage("请填写配置名称与模型名称", 5000, "error")
     return
   }
-  if (!profileData.providerId && (!profileData.baseUrl.trim() || !profileData.apiKey.trim())) {
-    showMessage("独立配置必须填写 API 基础 URL 与 API 密钥", 5000, "error")
+
+  const provKey = (profileData.provider || "").trim().toLowerCase()
+  const defaultBaseUrl = PRESET_PROVIDERS[provKey]?.defaultBaseUrl || ""
+  const effectiveBaseUrl = profileData.baseUrl?.trim() || defaultBaseUrl
+
+  if (!profileData.providerId && (!effectiveBaseUrl || !profileData.apiKey?.trim())) {
+    showMessage("独立配置必须填写 API 密钥与基础 URL", 5000, "error")
     return
   }
+
+  let autoRes: AutoProviderResult | null = null
 
   if (isNewProfile.value) {
     const newProf = await apiSwitchCore.addProfile(profileData)
     selectedProfileId.value = newProf.id
     isNewProfile.value = false
+    autoRes = (newProf as any)._autoProviderResult || null
   } else {
-    await apiSwitchCore.updateProfile(profileData)
+    autoRes = await apiSwitchCore.updateProfile(profileData)
   }
 
   refreshData()
-  showMessage("API 配置已保存", 3000, "info")
+
+  if (autoRes) {
+    const provName = autoRes.provider.displayName
+    if (autoRes.action === "created") {
+      showMessage(`API 配置已保存，并已自动生成提供商「${provName}」`, 4000, "info")
+    } else {
+      showMessage(`API 配置已保存，并已关联至已有提供商「${provName}」`, 4000, "info")
+    }
+  } else {
+    showMessage("API 配置已保存", 3000, "info")
+  }
+
   selectProfile(selectedProfileId.value!)
 }
 
