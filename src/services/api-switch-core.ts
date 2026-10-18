@@ -4,6 +4,7 @@ import { ProviderStore } from "./provider-store";
 import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo } from "./siyuan-adapter";
+import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 
 export type { ApiProfile } from "./profile-store";
 export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo } from "./plugin-binding-manager";
@@ -11,6 +12,7 @@ export type { RegisterPluginOptions } from "@/types";
 export { extractSiyuanAiSettings };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
+export { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 
 export interface ApiSwitchStorage {
   providers?: ApiProvider[];
@@ -180,7 +182,7 @@ export class ApiSwitchCore {
           );
         } else {
           this.registerPlugin(
-            pluginIdOrOptions,
+            pluginIdOrOptions as string,
             displayName!,
             callback!,
             localConfig,
@@ -413,119 +415,140 @@ export class ApiSwitchCore {
       const profiles = this.profileStore.getProfiles();
       const bindings = this.bindingManager.getBindings();
 
-      // 2. 导入/更新思源-编辑器 Profile（优先匹配已有配置避免重复）
+      // 2. 导入/更新思源-编辑器 Profile
       if (extracted.editing && extracted.editing.model) {
-        const match = this.findMatchingProfile(extracted.editing);
-        if (match) {
-          this.bindingManager.setBinding("siyuan_builtin_editing", match.profile.id);
-          reusedProfilesCount++;
-        } else {
-          const profileName = "思源-编辑器";
-          let exist = profiles.find((p) => p.id === bindings["siyuan_builtin_editing"] || p.name === profileName);
-          if (!exist) {
-            exist = await this.addProfile({
-              name: profileName,
-              providerId: extracted.editing.providerId,
-              provider: extracted.editing.provider,
-              protocol: extracted.editing.protocol,
-              baseUrl: extracted.editing.baseUrl,
-              apiKey: extracted.editing.apiKey,
-              model: extracted.editing.model,
-              models: [extracted.editing.model],
-              temperature: extracted.editing.temperature,
-              maxTokens: extracted.editing.maxTokens,
-              maxHistoryMessages: extracted.editing.maxHistoryMessages,
-              memo: "从思源笔记「设置-人工智能-编辑器」同步的配置",
-            });
-            createdProfilesCount++;
-          } else {
-            exist.providerId = extracted.editing.providerId;
-            exist.model = extracted.editing.model;
-            exist.temperature = extracted.editing.temperature;
-            exist.maxTokens = extracted.editing.maxTokens;
-            exist.maxHistoryMessages = extracted.editing.maxHistoryMessages;
+        const boundId = bindings["siyuan_builtin_editing"];
+        let exist = profiles.find((p) => (boundId && p.id === boundId) || p.name === "思源-编辑器");
+        if (!exist) {
+          const match = this.findMatchingProfile(extracted.editing);
+          if (match) {
+            exist = match.profile;
           }
+        }
+
+        if (exist) {
+          exist.providerId = extracted.editing.providerId;
+          exist.provider = extracted.editing.provider || exist.provider || "openai";
+          exist.protocol = extracted.editing.protocol || exist.protocol || "openai";
+          exist.baseUrl = extracted.editing.baseUrl;
+          exist.apiKey = extracted.editing.apiKey;
+          exist.model = extracted.editing.model;
+          if (!exist.models?.includes(extracted.editing.model)) {
+            exist.models = [...(exist.models || []), extracted.editing.model];
+          }
+          if (extracted.editing.temperature !== undefined) exist.temperature = extracted.editing.temperature;
+          if (extracted.editing.maxTokens !== undefined) exist.maxTokens = extracted.editing.maxTokens;
+          if (extracted.editing.maxHistoryMessages !== undefined) exist.maxHistoryMessages = extracted.editing.maxHistoryMessages;
           this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
+          reusedProfilesCount++;
+        } else {
+          exist = await this.addProfile({
+            name: "思源-编辑器",
+            providerId: extracted.editing.providerId,
+            provider: extracted.editing.provider || "openai",
+            protocol: extracted.editing.protocol || "openai",
+            baseUrl: extracted.editing.baseUrl,
+            apiKey: extracted.editing.apiKey,
+            model: extracted.editing.model,
+            models: [extracted.editing.model],
+            temperature: extracted.editing.temperature,
+            maxTokens: extracted.editing.maxTokens,
+            maxHistoryMessages: extracted.editing.maxHistoryMessages,
+            memo: "从思源笔记「设置-人工智能-编辑器」同步的配置",
+          });
+          this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
+          createdProfilesCount++;
         }
       }
 
-      // 3. 导入/更新思源-智能体 Profile（优先匹配已有配置避免重复）
+      // 3. 导入/更新思源-智能体 Profile（独立于编辑器，绝不吞并或复用编辑器 Profile）
       if (extracted.agent && extracted.agent.model) {
-        const match = this.findMatchingProfile(extracted.agent);
-        if (match) {
-          this.bindingManager.setBinding("siyuan_builtin_agent", match.profile.id);
-          reusedProfilesCount++;
-        } else {
-          const profileName = "思源-智能体";
-          let exist = profiles.find((p) => p.id === bindings["siyuan_builtin_agent"] || p.name === profileName);
-          if (!exist) {
-            exist = await this.addProfile({
-              name: profileName,
-              providerId: extracted.agent.providerId,
-              provider: extracted.agent.provider,
-              protocol: extracted.agent.protocol,
-              baseUrl: extracted.agent.baseUrl,
-              apiKey: extracted.agent.apiKey,
-              model: extracted.agent.model,
-              models: [extracted.agent.model],
-              temperature: extracted.agent.temperature,
-              maxTokens: extracted.agent.maxTokens,
-              maxToolCallRounds: extracted.agent.maxToolCallRounds,
-              sessionTimeout: extracted.agent.sessionTimeout,
-              streamIdleTimeout: extracted.agent.streamIdleTimeout,
-              confirmTimeout: extracted.agent.confirmTimeout,
-              maxRetries: extracted.agent.maxRetries,
-              memo: "从思源笔记「设置-人工智能-智能体」同步的配置",
-            });
-            createdProfilesCount++;
-          } else {
-            exist.providerId = extracted.agent.providerId;
-            exist.model = extracted.agent.model;
-            exist.temperature = extracted.agent.temperature;
-            exist.maxTokens = extracted.agent.maxTokens;
-            exist.maxToolCallRounds = extracted.agent.maxToolCallRounds;
-            exist.sessionTimeout = extracted.agent.sessionTimeout;
-            exist.streamIdleTimeout = extracted.agent.streamIdleTimeout;
-            exist.confirmTimeout = extracted.agent.confirmTimeout;
-            exist.maxRetries = extracted.agent.maxRetries;
+        const editingId = bindings["siyuan_builtin_editing"];
+        const boundId = bindings["siyuan_builtin_agent"];
+        let exist = profiles.find(
+          (p) => (boundId && p.id === boundId && p.id !== editingId) || p.name === "思源-智能体"
+        );
+        if (exist) {
+          exist.providerId = extracted.agent.providerId;
+          exist.provider = extracted.agent.provider || exist.provider || "openai";
+          exist.protocol = extracted.agent.protocol || exist.protocol || "openai";
+          exist.baseUrl = extracted.agent.baseUrl;
+          exist.apiKey = extracted.agent.apiKey;
+          exist.model = extracted.agent.model;
+          if (!exist.models?.includes(extracted.agent.model)) {
+            exist.models = [...(exist.models || []), extracted.agent.model];
           }
+          if (extracted.agent.temperature !== undefined) exist.temperature = extracted.agent.temperature;
+          if (extracted.agent.maxTokens !== undefined) exist.maxTokens = extracted.agent.maxTokens;
+          if (extracted.agent.maxToolCallRounds !== undefined) exist.maxToolCallRounds = extracted.agent.maxToolCallRounds;
+          if (extracted.agent.sessionTimeout !== undefined) exist.sessionTimeout = extracted.agent.sessionTimeout;
+          if (extracted.agent.streamIdleTimeout !== undefined) exist.streamIdleTimeout = extracted.agent.streamIdleTimeout;
+          if (extracted.agent.confirmTimeout !== undefined) exist.confirmTimeout = extracted.agent.confirmTimeout;
+          if (extracted.agent.maxRetries !== undefined) exist.maxRetries = extracted.agent.maxRetries;
           this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
-        }
-      }
-
-      // 4. 导入/更新思源-决策模型 Profile（优先匹配已有配置避免重复）
-      if (extracted.decision && extracted.decision.baseUrl) {
-        const match = this.findMatchingProfile(extracted.decision);
-        if (match) {
-          this.bindingManager.setBinding("siyuan_builtin_decision", match.profile.id);
           reusedProfilesCount++;
         } else {
-          const profileName = "思源-决策模型";
-          let exist = profiles.find((p) => p.id === bindings["siyuan_builtin_decision"] || p.name === profileName);
-          if (!exist) {
-            exist = await this.addProfile({
-              name: profileName,
-              provider: "custom",
-              baseUrl: extracted.decision.baseUrl,
-              apiKey: extracted.decision.apiKey,
-              model: extracted.decision.model,
-              models: [extracted.decision.model],
-              requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds,
-              isDecisionModel: true,
-              memo: "从思源笔记「设置-人工智能-决策模型」同步的配置",
-            });
-            createdProfilesCount++;
-          } else {
-            exist.baseUrl = extracted.decision.baseUrl;
-            exist.apiKey = extracted.decision.apiKey;
-            exist.model = extracted.decision.model;
-            exist.requestTimeoutSeconds = extracted.decision.requestTimeoutSeconds;
-            exist.isDecisionModel = true;
-          }
-          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          exist = await this.addProfile({
+            name: "思源-智能体",
+            providerId: extracted.agent.providerId,
+            provider: extracted.agent.provider || "openai",
+            protocol: extracted.agent.protocol || "openai",
+            baseUrl: extracted.agent.baseUrl,
+            apiKey: extracted.agent.apiKey,
+            model: extracted.agent.model,
+            models: [extracted.agent.model],
+            temperature: extracted.agent.temperature,
+            maxTokens: extracted.agent.maxTokens,
+            maxToolCallRounds: extracted.agent.maxToolCallRounds,
+            sessionTimeout: extracted.agent.sessionTimeout,
+            streamIdleTimeout: extracted.agent.streamIdleTimeout,
+            confirmTimeout: extracted.agent.confirmTimeout,
+            maxRetries: extracted.agent.maxRetries,
+            memo: "从思源笔记「设置-人工智能-智能体」同步的配置",
+          });
+          this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
+          createdProfilesCount++;
         }
       }
 
+      // 4. 导入/更新思源-决策模型 Profile (Jev 模型)
+      if (extracted.decision) {
+        const boundId = bindings["siyuan_builtin_decision"];
+        let exist = profiles.find((p) => (boundId && p.id === boundId) || p.name === "思源-决策模型" || (p.isDecisionModel && p.name.includes("决策")));
+        if (exist) {
+          exist.provider = "custom";
+          exist.protocol = "custom";
+          exist.baseUrl = extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone";
+          exist.apiKey = extracted.decision.apiKey;
+          exist.model = extracted.decision.model || "jev-latest";
+          if (!exist.models?.includes(exist.model)) {
+            exist.models = [...(exist.models || []), exist.model];
+          }
+          if (extracted.decision.requestTimeoutSeconds !== undefined) {
+            exist.requestTimeoutSeconds = extracted.decision.requestTimeoutSeconds;
+          }
+          exist.isDecisionModel = true;
+          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          reusedProfilesCount++;
+        } else {
+          exist = await this.addProfile({
+            name: "思源-决策模型",
+            provider: "custom",
+            protocol: "custom",
+            baseUrl: extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone",
+            apiKey: extracted.decision.apiKey,
+            model: extracted.decision.model || "jev-latest",
+            models: [extracted.decision.model || "jev-latest"],
+            requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds ?? 30,
+            isDecisionModel: true,
+            memo: "从思源笔记「设置-人工智能-决策模型」同步的配置 (Jev模型)",
+          });
+          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          createdProfilesCount++;
+        }
+      }
+
+      this.profileStore.setProfiles(profiles);
       await this.save();
       return {
         providersCount: this.providerStore.getProviders().length,
@@ -651,17 +674,20 @@ export class ApiSwitchCore {
         return { providersCount: 0, profilesCount: res.added + res.updated };
       }
 
+      // 兼容直接导入包含 { ai: ... } 的思源全局配置对象（如 conf.json）
+      const realAi = parsed.ai && typeof parsed.ai === "object" ? parsed.ai : parsed;
+
       // 2. 如果包含 providers
       const currentProviders = this.providerStore.getProviders();
       let importedProviders = 0;
-      if (Array.isArray(parsed.providers)) {
-        for (const rawP of parsed.providers) {
+      if (Array.isArray(realAi.providers)) {
+        for (const rawP of realAi.providers) {
           const prov: ApiProvider = {
             id: rawP.id || "provider_" + Math.random().toString(36).substring(2, 11),
             displayName: rawP.displayName || rawP.id || "未命名提供商",
             enabled: rawP.enabled ?? true,
-            baseUrl: rawP.baseURL || rawP.baseUrl || "",
-            apiKey: rawP.apiKey || "",
+            baseUrl: extractBaseUrl(rawP),
+            apiKey: extractApiKey(rawP),
             protocol: rawP.protocol || "openai",
             requestTimeout: rawP.requestTimeout ?? 30,
             headers: rawP.headers || {},
@@ -705,90 +731,96 @@ export class ApiSwitchCore {
       }
 
       // 3. 如果包含 _siyuanApiSwitch 扩展
-      if (parsed._siyuanApiSwitch?.profiles && Array.isArray(parsed._siyuanApiSwitch.profiles)) {
-        await this.importProfiles(parsed._siyuanApiSwitch.profiles);
-        if (parsed._siyuanApiSwitch.bindings && typeof parsed._siyuanApiSwitch.bindings === "object") {
-          this.bindingManager.setBindings({ ...this.bindingManager.getBindings(), ...parsed._siyuanApiSwitch.bindings });
+      if (realAi._siyuanApiSwitch?.profiles && Array.isArray(realAi._siyuanApiSwitch.profiles)) {
+        await this.importProfiles(realAi._siyuanApiSwitch.profiles);
+        if (realAi._siyuanApiSwitch.bindings && typeof realAi._siyuanApiSwitch.bindings === "object") {
+          this.bindingManager.setBindings({ ...this.bindingManager.getBindings(), ...realAi._siyuanApiSwitch.bindings });
         }
       } else {
-        // 如果是原生思源 ai.json（无 _siyuanApiSwitch），由 editing/agent/decision 派生 Profiles（校验防重复）
-        if (parsed.editing?.modelId) {
-          const matchedProv = this.providerStore.getProviders().find((p) => p.models?.some((m) => m.id === parsed.editing.modelId || m.name === parsed.editing.modelId));
+        // 如果是原生思源 ai.json（无 _siyuanApiSwitch），由 editing/agent/decision 派生 Profiles
+        if (realAi.editing && typeof realAi.editing === "object" && realAi.editing.modelId) {
+          const matchedProv = this.providerStore.getProviders().find((p) => p.models?.some((m) => m.id === realAi.editing.modelId || m.name === realAi.editing.modelId));
           const targetConf = {
             providerId: matchedProv?.id,
             provider: matchedProv?.protocol || "openai",
+            protocol: matchedProv?.protocol || "openai",
             baseUrl: matchedProv?.baseUrl || "",
             apiKey: matchedProv?.apiKey || "",
-            model: parsed.editing.modelId,
-            temperature: parsed.editing.temperature,
-            maxTokens: parsed.editing.maxCompletionTokens,
-            maxHistoryMessages: parsed.editing.maxHistoryMessages,
+            model: realAi.editing.modelId,
+            temperature: realAi.editing.temperature,
+            maxTokens: realAi.editing.maxCompletionTokens ?? realAi.editing.maxTokens,
+            maxHistoryMessages: realAi.editing.maxHistoryMessages,
           };
-          const match = this.findMatchingProfile(targetConf);
-          if (match) {
-            this.bindingManager.setBinding("siyuan_builtin_editing", match.profile.id);
+          let exist = this.profileStore.getProfiles().find((p) => p.name === "导入-思源编辑器");
+          if (exist) {
+            Object.assign(exist, targetConf);
           } else {
-            const p = await this.addProfile({
+            exist = await this.addProfile({
               name: "导入-思源编辑器",
               ...targetConf,
-              models: [parsed.editing.modelId],
+              models: [realAi.editing.modelId],
               memo: "从原生 ai.json 导入的编辑器配置",
             });
-            this.bindingManager.setBinding("siyuan_builtin_editing", p.id);
           }
+          this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
         }
 
-        if (parsed.agent?.modelId) {
-          const matchedProv = this.providerStore.getProviders().find((p) => p.models?.some((m) => m.id === parsed.agent.modelId || m.name === parsed.agent.modelId));
+        if (realAi.agent && typeof realAi.agent === "object" && realAi.agent.modelId) {
+          const matchedProv = this.providerStore.getProviders().find((p) => p.models?.some((m) => m.id === realAi.agent.modelId || m.name === realAi.agent.modelId));
           const targetConf = {
             providerId: matchedProv?.id,
             provider: matchedProv?.protocol || "openai",
+            protocol: matchedProv?.protocol || "openai",
             baseUrl: matchedProv?.baseUrl || "",
             apiKey: matchedProv?.apiKey || "",
-            model: parsed.agent.modelId,
-            temperature: parsed.agent.temperature,
-            maxTokens: parsed.agent.maxCompletionTokens,
-            maxToolCallRounds: parsed.agent.maxToolCallRounds,
-            sessionTimeout: parsed.agent.sessionTimeout,
-            streamIdleTimeout: parsed.agent.streamIdleTimeout,
-            confirmTimeout: parsed.agent.confirmTimeout,
-            maxRetries: parsed.agent.maxRetries,
+            model: realAi.agent.modelId,
+            temperature: realAi.agent.temperature,
+            maxTokens: realAi.agent.maxCompletionTokens ?? realAi.agent.maxTokens,
+            maxToolCallRounds: realAi.agent.maxToolCallRounds,
+            sessionTimeout: realAi.agent.sessionTimeout,
+            streamIdleTimeout: realAi.agent.streamIdleTimeout,
+            confirmTimeout: realAi.agent.confirmTimeout,
+            maxRetries: realAi.agent.maxRetries,
           };
-          const match = this.findMatchingProfile(targetConf);
-          if (match) {
-            this.bindingManager.setBinding("siyuan_builtin_agent", match.profile.id);
+          let exist = this.profileStore.getProfiles().find((p) => p.name === "导入-思源智能体");
+          if (exist) {
+            Object.assign(exist, targetConf);
           } else {
-            const p = await this.addProfile({
+            exist = await this.addProfile({
               name: "导入-思源智能体",
               ...targetConf,
-              models: [parsed.agent.modelId],
+              models: [realAi.agent.modelId],
               memo: "从原生 ai.json 导入的智能体配置",
             });
-            this.bindingManager.setBinding("siyuan_builtin_agent", p.id);
           }
+          this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
         }
 
-        if (parsed.decision?.endpoint) {
+        if (realAi.decision && typeof realAi.decision === "object") {
+          const decKey = extractApiKey(realAi.decision);
+          const decUrl = extractBaseUrl(realAi.decision, true);
+          const decModel = extractModelName(realAi.decision, true);
           const targetConf = {
             provider: "custom",
-            baseUrl: parsed.decision.endpoint,
-            apiKey: parsed.decision.apiKey || "",
-            model: parsed.decision.name || "jev-latest",
-            requestTimeoutSeconds: parsed.decision.timeout ?? 30,
+            protocol: "custom",
+            baseUrl: decUrl,
+            apiKey: decKey,
+            model: decModel,
+            models: [decModel],
+            requestTimeoutSeconds: realAi.decision.timeout ?? realAi.decision.requestTimeoutSeconds ?? 30,
             isDecisionModel: true,
+            memo: "从原生 ai.json 导入的决策模型配置 (Jev模型)",
           };
-          const match = this.findMatchingProfile(targetConf);
-          if (match) {
-            this.bindingManager.setBinding("siyuan_builtin_decision", match.profile.id);
+          let exist = this.profileStore.getProfiles().find((p) => p.name === "导入-思源决策模型" || p.isDecisionModel);
+          if (exist) {
+            Object.assign(exist, targetConf);
           } else {
-            const p = await this.addProfile({
+            exist = await this.addProfile({
               name: "导入-思源决策模型",
               ...targetConf,
-              models: [targetConf.model],
-              memo: "从原生 ai.json 导入的决策模型配置",
             });
-            this.bindingManager.setBinding("siyuan_builtin_decision", p.id);
           }
+          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
         }
       }
 

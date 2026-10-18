@@ -23,6 +23,8 @@ export interface SiyuanExtractedAiInfo {
   isDecisionModel?: boolean;
 }
 
+import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
+
 export function extractSiyuanAiSettings(aiConfig: any): {
   providers: ApiProvider[];
   editing: SiyuanExtractedAiInfo | null;
@@ -33,17 +35,10 @@ export function extractSiyuanAiSettings(aiConfig: any): {
     return { providers: [], editing: null, agent: null, decision: null };
   }
 
-  const rawProviders = Array.isArray(aiConfig.providers) ? aiConfig.providers : [];
+  // 兼容直接导入包含 { ai: ... } 的思源全局配置对象
+  const realAi = aiConfig.ai && typeof aiConfig.ai === "object" ? aiConfig.ai : aiConfig;
 
-  const getBaseUrl = (obj: any): string => {
-    if (!obj || typeof obj !== "object") return "";
-    return obj.baseURL || obj.baseUrl || obj.apiBaseURL || obj.apiBaseUrl || "";
-  };
-
-  const getApiKey = (obj: any): string => {
-    if (!obj || typeof obj !== "object") return "";
-    return obj.apiKey || obj.apikey || obj.api_key || "";
-  };
+  const rawProviders = Array.isArray(realAi.providers) ? realAi.providers : [];
 
   // 1. 解析思源 providers 列表
   const providers: ApiProvider[] = rawProviders.map((p: any, idx: number) => {
@@ -61,8 +56,8 @@ export function extractSiyuanAiSettings(aiConfig: any): {
       id: p.id || `provider_${idx}_${Math.random().toString(36).substring(2, 7)}`,
       displayName: p.displayName || p.id || `提供商 ${idx + 1}`,
       enabled: p.enabled ?? true,
-      apiKey: getApiKey(p),
-      baseUrl: getBaseUrl(p),
+      apiKey: extractApiKey(p),
+      baseUrl: extractBaseUrl(p),
       protocol: p.protocol || "openai",
       requestTimeout: p.requestTimeout ?? 30,
       headers: p.headers && typeof p.headers === "object" ? p.headers : {},
@@ -82,7 +77,7 @@ export function extractSiyuanAiSettings(aiConfig: any): {
         }
       }
     }
-    const fallbackProvider = rawProviders.find((p: any) => p && p.enabled && getApiKey(p) !== "") || rawProviders[0];
+    const fallbackProvider = rawProviders.find((p: any) => p && p.enabled && extractApiKey(p) !== "") || rawProviders[0];
     if (fallbackProvider) {
       const fallbackModel = fallbackProvider.models?.find((m: any) => m && m.enabled) || fallbackProvider.models?.[0];
       return { provider: fallbackProvider, model: fallbackModel };
@@ -92,77 +87,118 @@ export function extractSiyuanAiSettings(aiConfig: any): {
 
   // 2. 思源笔记 API - 编辑器 (Editing)
   let editingConfig: SiyuanExtractedAiInfo | null = null;
-  const editingResolved = resolveModel(aiConfig.editing?.modelId);
+  const editingResolved = resolveModel(realAi.editing?.modelId);
   if (editingResolved && editingResolved.provider) {
     editingConfig = {
       providerId: editingResolved.provider.id,
       provider: editingResolved.provider.protocol || "openai",
       protocol: editingResolved.provider.protocol || "openai",
-      baseUrl: getBaseUrl(editingResolved.provider),
-      apiKey: getApiKey(editingResolved.provider),
-      model: editingResolved.model?.name || editingResolved.model?.id || aiConfig.editing?.modelId || "",
+      baseUrl: extractBaseUrl(editingResolved.provider),
+      apiKey: extractApiKey(editingResolved.provider),
+      model: editingResolved.model?.name || editingResolved.model?.displayName || editingResolved.model?.id || realAi.editing?.modelId || "",
       headers: editingResolved.provider.headers || {},
       requestTimeoutSeconds: editingResolved.provider.requestTimeout,
-      temperature: aiConfig.editing?.temperature,
-      maxTokens: aiConfig.editing?.maxCompletionTokens,
-      maxHistoryMessages: aiConfig.editing?.maxHistoryMessages,
+      temperature: realAi.editing?.temperature,
+      maxTokens: realAi.editing?.maxCompletionTokens ?? realAi.editing?.maxTokens,
+      maxHistoryMessages: realAi.editing?.maxHistoryMessages,
     };
-  } else if (aiConfig.openAI && (getApiKey(aiConfig.openAI) !== "" || getBaseUrl(aiConfig.openAI) !== "")) {
+  } else if (realAi.editing && typeof realAi.editing === "object" && realAi.editing.modelId) {
+    const fallbackProv = rawProviders.find((p: any) => p && p.enabled) || rawProviders[0];
+    editingConfig = {
+      providerId: fallbackProv?.id,
+      provider: fallbackProv?.protocol || "openai",
+      protocol: fallbackProv?.protocol || "openai",
+      baseUrl: extractBaseUrl(fallbackProv),
+      apiKey: extractApiKey(fallbackProv),
+      model: realAi.editing.modelId,
+      headers: fallbackProv?.headers || {},
+      requestTimeoutSeconds: fallbackProv?.requestTimeout ?? 30,
+      temperature: realAi.editing.temperature,
+      maxTokens: realAi.editing.maxCompletionTokens ?? realAi.editing.maxTokens,
+      maxHistoryMessages: realAi.editing.maxHistoryMessages,
+    };
+  } else if (realAi.openAI && (extractApiKey(realAi.openAI) !== "" || extractBaseUrl(realAi.openAI) !== "")) {
     editingConfig = {
       provider: "openai",
-      baseUrl: getBaseUrl(aiConfig.openAI),
-      apiKey: getApiKey(aiConfig.openAI),
-      model: aiConfig.openAI.apiModel || "",
-      requestTimeoutSeconds: aiConfig.openAI.apiTimeout,
-      temperature: aiConfig.openAI.apiTemperature,
-      maxTokens: aiConfig.openAI.apiMaxTokens,
+      baseUrl: extractBaseUrl(realAi.openAI),
+      apiKey: extractApiKey(realAi.openAI),
+      model: realAi.openAI.apiModel || "",
+      requestTimeoutSeconds: realAi.openAI.apiTimeout,
+      temperature: realAi.openAI.apiTemperature,
+      maxTokens: realAi.openAI.apiMaxTokens,
     };
   }
 
   // 3. 思源笔记 API - 智能体 (Agent)
   let agentConfig: SiyuanExtractedAiInfo | null = null;
-  const agentResolved = resolveModel(aiConfig.agent?.modelId);
+  const agentResolved = resolveModel(realAi.agent?.modelId);
   if (agentResolved && agentResolved.provider) {
     agentConfig = {
       providerId: agentResolved.provider.id,
       provider: agentResolved.provider.protocol || "openai",
       protocol: agentResolved.provider.protocol || "openai",
-      baseUrl: getBaseUrl(agentResolved.provider),
-      apiKey: getApiKey(agentResolved.provider),
-      model: agentResolved.model?.name || agentResolved.model?.id || aiConfig.agent?.modelId || "",
-      headers: editingResolved ? (agentResolved.provider.headers || {}) : {},
+      baseUrl: extractBaseUrl(agentResolved.provider),
+      apiKey: extractApiKey(agentResolved.provider),
+      model: agentResolved.model?.name || agentResolved.model?.displayName || agentResolved.model?.id || realAi.agent?.modelId || "",
+      headers: agentResolved.provider.headers || {},
       requestTimeoutSeconds: agentResolved.provider.requestTimeout,
-      temperature: aiConfig.agent?.temperature,
-      maxTokens: aiConfig.agent?.maxCompletionTokens,
-      maxToolCallRounds: aiConfig.agent?.maxToolCallRounds,
-      sessionTimeout: aiConfig.agent?.sessionTimeout,
-      streamIdleTimeout: aiConfig.agent?.streamIdleTimeout,
-      confirmTimeout: aiConfig.agent?.confirmTimeout,
-      maxRetries: aiConfig.agent?.maxRetries,
+      temperature: realAi.agent?.temperature,
+      maxTokens: realAi.agent?.maxCompletionTokens ?? realAi.agent?.maxTokens,
+      maxToolCallRounds: realAi.agent?.maxToolCallRounds,
+      sessionTimeout: realAi.agent?.sessionTimeout,
+      streamIdleTimeout: realAi.agent?.streamIdleTimeout,
+      confirmTimeout: realAi.agent?.confirmTimeout,
+      maxRetries: realAi.agent?.maxRetries,
     };
-  } else if (aiConfig.openAI && (getApiKey(aiConfig.openAI) !== "" || getBaseUrl(aiConfig.openAI) !== "")) {
+  } else if (realAi.agent && typeof realAi.agent === "object" && realAi.agent.modelId) {
+    const fallbackProv = rawProviders.find((p: any) => p && p.enabled) || rawProviders[0];
+    agentConfig = {
+      providerId: fallbackProv?.id,
+      provider: fallbackProv?.protocol || "openai",
+      protocol: fallbackProv?.protocol || "openai",
+      baseUrl: extractBaseUrl(fallbackProv),
+      apiKey: extractApiKey(fallbackProv),
+      model: realAi.agent.modelId,
+      headers: fallbackProv?.headers || {},
+      requestTimeoutSeconds: fallbackProv?.requestTimeout ?? 30,
+      temperature: realAi.agent.temperature,
+      maxTokens: realAi.agent.maxCompletionTokens ?? realAi.agent.maxTokens,
+      maxToolCallRounds: realAi.agent.maxToolCallRounds,
+      sessionTimeout: realAi.agent.sessionTimeout,
+      streamIdleTimeout: realAi.agent.streamIdleTimeout,
+      confirmTimeout: realAi.agent.confirmTimeout,
+      maxRetries: realAi.agent.maxRetries,
+    };
+  } else if (realAi.openAI && (extractApiKey(realAi.openAI) !== "" || extractBaseUrl(realAi.openAI) !== "")) {
     agentConfig = {
       provider: "openai",
-      baseUrl: getBaseUrl(aiConfig.openAI),
-      apiKey: getApiKey(aiConfig.openAI),
-      model: aiConfig.openAI.apiModel || "",
-      requestTimeoutSeconds: aiConfig.openAI.apiTimeout,
-      temperature: aiConfig.openAI.apiTemperature,
-      maxTokens: aiConfig.openAI.apiMaxTokens,
+      baseUrl: extractBaseUrl(realAi.openAI),
+      apiKey: extractApiKey(realAi.openAI),
+      model: realAi.openAI.apiModel || "",
+      requestTimeoutSeconds: realAi.openAI.apiTimeout,
+      temperature: realAi.openAI.apiTemperature,
+      maxTokens: realAi.openAI.apiMaxTokens,
     };
   }
 
-  // 4. 思源笔记 API - 决策模型 (Decision)
+  // 4. 思源笔记 API - 决策模型 (Decision / Jev 模型)
   let decisionConfig: SiyuanExtractedAiInfo | null = null;
-  if (aiConfig.decision && typeof aiConfig.decision === "object") {
-    decisionConfig = {
-      provider: "custom",
-      baseUrl: aiConfig.decision.endpoint || "",
-      apiKey: aiConfig.decision.apiKey || "",
-      model: aiConfig.decision.name || "",
-      requestTimeoutSeconds: aiConfig.decision.timeout ?? 30,
-      isDecisionModel: true,
-    };
+  if (realAi.decision && typeof realAi.decision === "object") {
+    const decKey = extractApiKey(realAi.decision);
+    const decUrl = extractBaseUrl(realAi.decision, true);
+    const decModel = extractModelName(realAi.decision, true);
+    const decTimeout = realAi.decision.timeout ?? realAi.decision.requestTimeoutSeconds ?? 30;
+
+    if (realAi.decision.enabled !== false || decKey || decModel || decUrl) {
+      decisionConfig = {
+        provider: "custom",
+        baseUrl: decUrl,
+        apiKey: decKey,
+        model: decModel,
+        requestTimeoutSeconds: decTimeout,
+        isDecisionModel: true,
+      };
+    }
   }
 
   return { providers, editing: editingConfig, agent: agentConfig, decision: decisionConfig };

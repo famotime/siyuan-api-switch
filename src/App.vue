@@ -156,8 +156,13 @@
                     @click="selectProfile(prof.id)"
                   >
                     <div class="profile-item-meta">
-                      <div class="profile-item-name">{{ prof.name }}</div>
-                      <div class="profile-item-sub">{{ getProviderName(prof.provider) }} | {{ prof.model }}</div>
+                      <div class="profile-item-name">
+                        <span>{{ prof.name }}</span>
+                        <span v-if="prof.isDecisionModel" class="profile-badge decision-badge">Jev 决策模型</span>
+                        <span v-else-if="prof.name.includes('编辑器')" class="profile-badge builtin-badge">思源编辑器</span>
+                        <span v-else-if="prof.name.includes('智能体')" class="profile-badge builtin-badge">思源智能体</span>
+                      </div>
+                      <div class="profile-item-sub">{{ getProfileDisplaySub(prof) }}</div>
                     </div>
                     <button class="profile-quick-apply" @click.stop="applyProfileToAll(prof)" data-tooltip="应用到所有接管项目" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" style="fill:none!important"></polygon></svg>
@@ -766,6 +771,21 @@ const getProviderName = (provider: string) => {
     custom: "自定义",
   }
   return dict[provider] || provider || "未知"
+}
+
+const getProfileDisplaySub = (prof: ApiProfile) => {
+  let provName = ""
+  if (prof.providerId) {
+    const matched = providers.value.find((p) => p.id === prof.providerId)
+    provName = matched?.displayName || getProviderName(matched?.protocol || "")
+  }
+  if (!provName) {
+    provName = getProviderName(prof.provider)
+  }
+  if (prof.isDecisionModel && (!provName || provName === "未知" || provName === "自定义")) {
+    provName = "Jev 决策模型"
+  }
+  return `${provName || "未知"} | ${prof.model || "未设模型"}`
 }
 
 onMounted(() => {
