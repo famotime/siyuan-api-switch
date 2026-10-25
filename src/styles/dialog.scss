@@ -472,15 +472,15 @@
     line-height: 1.3;
 
     &.builtin-badge {
-      background-color: var(--b3-theme-primary-light, rgba(63, 81, 181, 0.12));
-      color: var(--b3-theme-primary, #3f51b5);
-      border: 1px solid rgba(63, 81, 181, 0.2);
+      background-color: var(--sw-blue-bg);
+      color: var(--sw-blue-text);
+      border: 1px solid var(--sw-blue-border);
     }
 
     &.decision-badge {
-      background-color: rgba(255, 152, 0, 0.12);
-      color: #ff9800;
-      border: 1px solid rgba(255, 152, 0, 0.25);
+      background-color: var(--sw-warn-bg);
+      color: var(--sw-warn-text);
+      border: 1px solid var(--sw-warn-border);
     }
   }
 }
@@ -507,8 +507,8 @@
     font-weight: bold;
 
     &.bound {
-      background-color: var(--b3-theme-success-light, rgba(76, 175, 80, 0.12));
-      color: var(--b3-theme-success, #4caf50);
+      background-color: var(--sw-ok-bg);
+      color: var(--sw-ok-text);
     }
 
     &.unbound {
@@ -1151,20 +1151,307 @@
 .add-model-input-group {
   display: flex;
   gap: 8px;
+}
 
-  .mini-input {
-    flex: 1;
-    height: 28px;
-    font-size: 12px;
-    padding: 0 8px;
+// 全局小尺寸控件：同屏上下文操作统一 28px 高 / 12px 字号（与主操作区 14px 大按钮分层）
+.mini-input {
+  flex: 1;
+  height: 28px;
+  font-size: 12px;
+  padding: 0 8px;
+}
+
+.mini-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: none;
+}
+
+// ===================== 供应商探测与预置目录（v0.10.0+） =====================
+
+// ---- 对比度令牌：浅色主题基底，深色主题经 data-theme-mode 覆盖 ----
+// 提示标签一律使用「深色文字 on 淡色底」/「亮色文字 on 深色底」的高对比组合，
+// 避免主色文字叠主色淡底导致的看不清问题。
+.plugin-app-main {
+  --sw-ok-text: #116329;
+  --sw-ok-bg: rgba(46, 160, 67, 0.12);
+  --sw-ok-border: rgba(46, 160, 67, 0.35);
+  --sw-fail-text: #c01c28;
+  --sw-fail-bg: rgba(248, 81, 73, 0.1);
+  --sw-fail-border: rgba(248, 81, 73, 0.35);
+  --sw-warn-text: #92400e;
+  --sw-warn-bg: rgba(217, 119, 6, 0.12);
+  --sw-warn-border: rgba(217, 119, 6, 0.4);
+  --sw-blue-text: #1d4ed8;
+  --sw-blue-bg: rgba(37, 99, 235, 0.1);
+  --sw-blue-border: rgba(37, 99, 235, 0.4);
+  --sw-grey-text: #57606a;
+  --sw-grey-bg: rgba(158, 158, 158, 0.14);
+  --sw-grey-border: rgba(158, 158, 158, 0.4);
+}
+
+html[data-theme-mode="dark"] .plugin-app-main {
+  --sw-ok-text: #7ee787;
+  --sw-ok-bg: rgba(46, 160, 67, 0.2);
+  --sw-ok-border: rgba(126, 231, 135, 0.4);
+  --sw-fail-text: #ff8183;
+  --sw-fail-bg: rgba(248, 81, 73, 0.16);
+  --sw-fail-border: rgba(255, 129, 131, 0.45);
+  --sw-warn-text: #f0b357;
+  --sw-warn-bg: rgba(217, 119, 6, 0.18);
+  --sw-warn-border: rgba(240, 179, 87, 0.45);
+  --sw-blue-text: #79b8ff;
+  --sw-blue-bg: rgba(121, 184, 255, 0.16);
+  --sw-blue-border: rgba(121, 184, 255, 0.45);
+  --sw-grey-text: #b0b8bf;
+  --sw-grey-bg: rgba(158, 158, 158, 0.16);
+  --sw-grey-border: rgba(176, 184, 191, 0.4);
+}
+
+.fn__rotate {
+  animation: sy-api-switch-rotate 1s linear infinite;
+}
+
+@keyframes sy-api-switch-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.model-pool-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+
+  .refresh-models-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+}
+
+.model-cap-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 16px;
+  font-family: monospace;
+  border: 1px solid transparent;
+
+  // 已知容量：实心主题色 + 白字（与主按钮同对比级别，深浅主题都可读）
+  &.known {
+    background-color: var(--b3-theme-primary);
+    color: #fff;
   }
 
-  .mini-btn {
-    height: 28px;
-    padding: 0 12px;
+  &.unknown {
+    background-color: transparent;
+    color: var(--b3-theme-on-surface);
+    border-color: var(--b3-border-color);
+  }
+}
+
+.model-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--sw-blue-border);
+  border-radius: 4px;
+  background-color: var(--sw-blue-bg);
+
+  .model-action-label {
     font-size: 12px;
+    color: var(--b3-theme-on-surface);
+
+    code {
+      font-family: monospace;
+      color: var(--b3-theme-on-surface);
+      font-weight: 600;
+    }
+  }
+}
+
+.probe-status {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border-radius: 4px;
+  word-break: break-all;
+  white-space: pre-wrap;
+
+  &.ok {
+    background-color: var(--sw-ok-bg);
+    color: var(--sw-ok-text);
+    border: 1px solid var(--sw-ok-border);
+  }
+
+  &.fail {
+    background-color: var(--sw-fail-bg);
+    color: var(--sw-fail-text);
+    border: 1px solid var(--sw-fail-border);
+  }
+
+  &.info {
+    background-color: var(--b3-theme-background-hover);
+    color: var(--b3-theme-on-surface);
+    border: 1px solid var(--b3-border-color);
+  }
+}
+
+// 模型列表头部的操作按钮组（测试链接 / 刷新可用模型）
+.model-pool-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// 预置供应商目录选择器
+.preset-picker-dialog {
+  background-color: var(--b3-theme-surface);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  width: 640px;
+  max-width: 92vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .preset-picker-title {
+    padding: 16px 20px 4px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .preset-picker-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .preset-group-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--b3-theme-on-surface);
+    margin-bottom: 8px;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .preset-card {
+    text-align: left;
+    background-color: var(--b3-theme-background);
+    border: 1px solid var(--b3-border-color);
+    border-radius: 6px;
+    padding: 10px 12px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+    color: var(--b3-theme-on-surface);
+
+    &:hover {
+      border-color: var(--b3-theme-primary);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .preset-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .preset-card-icon {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      flex: none;
+
+      &.preset-card-icon--fallback {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--sw-blue-bg);
+        color: var(--sw-blue-text);
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+    }
+
+    .preset-card-name {
+      font-size: 13px;
+      font-weight: 600;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .preset-card-url {
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--b3-theme-on-surface);
+      opacity: 0.75;
+      word-break: break-all;
+      line-height: 1.4;
+      min-height: 14px;
+    }
+
+    .preset-card-tags {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+  }
+
+  .preset-chip {
+    font-size: 10px;
+    line-height: 16px;
+    padding: 0 6px;
+    border-radius: 8px;
+    border: 1px solid var(--sw-grey-border);
+    background-color: var(--sw-grey-bg);
+    color: var(--sw-grey-text);
+
+    &.preset-chip--china {
+      color: var(--sw-warn-text);
+      background-color: var(--sw-warn-bg);
+      border-color: var(--sw-warn-border);
+    }
+
+    &.preset-chip--intl {
+      color: var(--sw-blue-text);
+      background-color: var(--sw-blue-bg);
+      border-color: var(--sw-blue-border);
+    }
+  }
+
+  .confirm-actions {
+    padding: 12px 20px;
+    border-top: 1px solid var(--b3-border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
   }
 }

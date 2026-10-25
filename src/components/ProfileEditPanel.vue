@@ -32,10 +32,7 @@
           </div>
           <input v-if="localProfile.providerId" type="text" class="b3-text-field" :value="localProfile.provider" disabled />
           <select v-else class="b3-select" v-model="localProfile.provider" @change="onProviderChange">
-            <option value="deepseek">DeepSeek</option>
-            <option value="gemini">Google Gemini</option>
-            <option value="siliconflow">SiliconFlow (硅基流动)</option>
-            <option value="openai">OpenAI</option>
+            <option v-for="preset in presetOptions" :key="preset.id" :value="preset.id">{{ preset.displayName }}</option>
             <option value="custom">Custom (自定义)</option>
           </select>
         </div>
@@ -190,7 +187,7 @@
 import { ref, computed, watch } from "vue";
 import { ApiProfile } from "@/services/api-switch-core";
 import { ApiProvider } from "@/types";
-import { PRESET_PROVIDERS } from "@/constants/providers";
+import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST } from "@/constants/providers";
 
 const props = defineProps<{
   profile: ApiProfile;
@@ -209,13 +206,15 @@ const showApiKey = ref(false);
 const showAdvanced = ref(false);
 const newModelInput = ref("");
 
-const presetModels: Record<string, string[]> = {
-  deepseek: PRESET_PROVIDERS.deepseek.presetModels,
-  gemini: PRESET_PROVIDERS.gemini.presetModels,
-  siliconflow: PRESET_PROVIDERS.siliconflow.presetModels,
-  openai: PRESET_PROVIDERS.openai.presetModels,
-  custom: [],
-};
+const presetOptions = PRESET_PROVIDER_LIST.filter((p) => p.category !== "custom");
+
+const presetModels = computed<Record<string, string[]>>(() => {
+  const map: Record<string, string[]> = { custom: [] };
+  for (const preset of PRESET_PROVIDER_LIST) {
+    map[preset.id] = preset.presetModels;
+  }
+  return map;
+});
 
 watch(
   () => props.profile,
@@ -262,13 +261,19 @@ const onProviderChange = () => {
   const preset = PRESET_PROVIDERS[prov];
   if (preset) {
     localProfile.value.baseUrl = preset.defaultBaseUrl;
+    localProfile.value.protocol = preset.protocol;
     localProfile.value.providerUrl = preset.providerUrl || "";
-    const defaultModels = preset.presetModels ? [...preset.presetModels] : [preset.defaultModel];
-    localProfile.value.models = defaultModels;
-    if (!defaultModels.includes(localProfile.value.model)) {
-      localProfile.value.model = defaultModels[0] || preset.defaultModel;
+    const defaultModels = preset.presetModels && preset.presetModels.length > 0
+      ? [...preset.presetModels]
+      : (preset.defaultModel ? [preset.defaultModel] : []);
+    if (defaultModels.length > 0) {
+      localProfile.value.models = defaultModels;
+      if (!defaultModels.includes(localProfile.value.model)) {
+        localProfile.value.model = defaultModels[0];
+      }
     }
   } else {
+    localProfile.value.protocol = "openai";
     localProfile.value.providerUrl = "";
   }
 };

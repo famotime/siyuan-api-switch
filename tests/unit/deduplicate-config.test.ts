@@ -29,7 +29,11 @@ describe("配置一致性校验与防重复配置机制", () => {
       expect(isProtocolCompatible("openai", "custom")).toBe(true);
       expect(isProtocolCompatible("deepseek", "openai")).toBe(true);
       expect(isProtocolCompatible("siliconflow", "deepseek")).toBe(true);
-      expect(isProtocolCompatible("gemini", "openai")).toBe(false);
+      // 值域迁移后：gemini 走 OpenAI 兼容端点（读档时已映射为 openai），与 openai 视作兼容
+      expect(isProtocolCompatible("gemini", "openai")).toBe(true);
+      expect(isProtocolCompatible("openai", "openai-responses")).toBe(true);
+      // anthropic-messages 是独立线路协议，与 OpenAI 生态互不兼容
+      expect(isProtocolCompatible("anthropic-messages", "openai")).toBe(false);
       expect(isProtocolCompatible("anthropic", "gemini")).toBe(false);
     });
   });

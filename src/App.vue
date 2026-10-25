@@ -289,18 +289,27 @@
         </div>
       </div>
     </div>
+
+    <!-- 预置供应商目录选择器 -->
+    <ProviderPresetPicker
+      v-if="showPresetPicker"
+      @select="createProviderFromPreset"
+      @cancel="showPresetPicker = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, AutoProviderResult } from "@/services/api-switch-core"
-import { ApiProvider } from "@/types"
+import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, PRESET_PROVIDER_LIST, AutoProviderResult } from "@/services/api-switch-core"
+import { ApiProvider, ApiProviderModel } from "@/types"
+import { lookupModelContextLength } from "@/constants/model-contexts"
 import { showMessage } from "siyuan"
 import { useWindowDrag } from "@/composables/useWindowDrag"
 import ProviderEditPanel from "@/components/ProviderEditPanel.vue"
 import ProfileEditPanel from "@/components/ProfileEditPanel.vue"
 import PluginBindingsPanel from "@/components/PluginBindingsPanel.vue"
+import ProviderPresetPicker from "@/components/ProviderPresetPicker.vue"
 
 // 调试日志开关
 const STORAGE_KEY_DEBUG = "sy_api_switch_debug"
@@ -437,22 +446,58 @@ const selectProvider = (id: string) => {
 
 const createNewProvider = () => {
   handleSafeNavigate(() => {
+    // 「+」先弹出预置目录（与思源原生一致）；选择后再进入表单
+    showPresetPicker.value = true
+  })
+}
+
+const showPresetPicker = ref(false)
+
+const createProviderFromPreset = (presetId: string) => {
+  showPresetPicker.value = false
+  const preset = PRESET_PROVIDER_LIST.find((p) => p.id === presetId)
+  if (!preset) return
+
+  handleSafeNavigate(() => {
     activeView.value = 'provider'
     selectedProviderId.value = null
     selectedProfileId.value = null
     activePluginId.value = null
     isNewProvider.value = true
 
-    editingProvider.value = {
-      id: "",
-      displayName: "新 API 提供商",
-      enabled: true,
-      protocol: "openai",
-      baseUrl: "https://api.openai.com/v1",
-      apiKey: "",
-      requestTimeout: 30,
-      headers: {},
-      models: [],
+    if (preset.category === 'custom') {
+      // 自定义：进入空白表单
+      editingProvider.value = {
+        id: "",
+        displayName: "新 API 提供商",
+        enabled: true,
+        protocol: "openai",
+        baseUrl: "",
+        apiKey: "",
+        requestTimeout: 30,
+        headers: {},
+        models: [],
+      }
+    } else {
+      // 预置模板：带名称/协议/地址/推荐模型池，容量优先取内置快照表
+      const models: ApiProviderModel[] = preset.presetModels.map((name) => ({
+        id: name,
+        name,
+        displayName: name,
+        enabled: true,
+        contextLength: lookupModelContextLength(name) || undefined,
+      }))
+      editingProvider.value = {
+        id: "",
+        displayName: preset.displayName,
+        enabled: true,
+        protocol: preset.protocol,
+        baseUrl: preset.defaultBaseUrl,
+        apiKey: "",
+        requestTimeout: 30,
+        headers: {},
+        models,
+      }
     }
     recordProviderSnapshot(editingProvider.value!)
   })
@@ -511,9 +556,16 @@ const selectPlugin = (id: string) => {
 }
 
 // 提供商保存与删除
+const isLocalBaseUrl = (url: string) => /\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//i.test(url.trim()) || /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/?$/i.test(url.trim())
+
 const saveProvider = async (providerData: ApiProvider) => {
-  if (!providerData.displayName.trim() || !providerData.baseUrl.trim() || !providerData.apiKey.trim()) {
-    showMessage("请填写提供商名称、Base URL 与 API Key", 5000, "error")
+  const isLocal = isLocalBaseUrl(providerData.baseUrl || "")
+  if (!providerData.displayName.trim() || !providerData.baseUrl.trim()) {
+    showMessage("请填写提供商名称与 Base URL", 5000, "error")
+    return
+  }
+  if (!providerData.apiKey.trim() && !isLocal) {
+    showMessage("请填写 API Key（本地服务如 Ollama / LM Studio 可留空）", 5000, "error")
     return
   }
 
@@ -758,11 +810,9 @@ const importSiyuanBuiltInAi = async () => {
 }
 
 const getProviderName = (provider: string) => {
+  const preset = PRESET_PROVIDERS[provider]
+  if (preset) return preset.displayName
   const dict: Record<string, string> = {
-    deepseek: "DeepSeek",
-    gemini: "Google Gemini",
-    siliconflow: "SiliconFlow",
-    openai: "OpenAI",
     custom: "自定义",
   }
   return dict[provider] || provider || "未知"

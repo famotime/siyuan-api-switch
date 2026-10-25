@@ -73,6 +73,7 @@ export class ProfileStore {
         requestTimeoutSeconds: prof.requestTimeoutSeconds !== undefined ? Number(prof.requestTimeoutSeconds) : undefined,
         temperature: prof.temperature !== undefined ? Number(prof.temperature) : undefined,
         maxTokens: prof.maxTokens !== undefined ? Number(prof.maxTokens) : undefined,
+        contextWindow: prof.contextWindow !== undefined ? Number(prof.contextWindow) : undefined,
         maxHistoryMessages: prof.maxHistoryMessages !== undefined ? Number(prof.maxHistoryMessages) : undefined,
         maxToolCallRounds: prof.maxToolCallRounds !== undefined ? Number(prof.maxToolCallRounds) : undefined,
         sessionTimeout: prof.sessionTimeout !== undefined ? Number(prof.sessionTimeout) : undefined,
@@ -110,6 +111,10 @@ export class ProfileStore {
     const providerModels = provider.models && provider.models.length > 0
       ? provider.models.map((m) => m.name || m.id)
       : [];
+    // 上下文容量继承：Profile 显式值优先，缺省回退关联提供商当前模型的 contextLength
+    const providerModelEntry = (provider.models || []).find(
+      (m) => (m.name || m.id) === profile.model
+    );
 
     return {
       ...profile,
@@ -120,6 +125,7 @@ export class ProfileStore {
       headers: { ...(provider.headers || {}), ...(profile.headers || {}) },
       requestTimeoutSeconds: profile.requestTimeoutSeconds ?? provider.requestTimeout ?? 30,
       models: providerModels.length > 0 ? providerModels : (profile.models || (profile.model ? [profile.model] : [])),
+      contextWindow: profile.contextWindow ?? providerModelEntry?.contextLength,
     };
   }
 
@@ -140,6 +146,7 @@ export class ProfileStore {
     if (effective.requestTimeoutSeconds !== undefined && effective.requestTimeoutSeconds !== null) conf.requestTimeoutSeconds = effective.requestTimeoutSeconds;
     if (effective.temperature !== undefined && effective.temperature !== null) conf.temperature = effective.temperature;
     if (effective.maxTokens !== undefined && effective.maxTokens !== null) conf.maxTokens = effective.maxTokens;
+    if (effective.contextWindow !== undefined && effective.contextWindow !== null && effective.contextWindow > 0) conf.contextWindow = effective.contextWindow;
     if (effective.maxHistoryMessages !== undefined && effective.maxHistoryMessages !== null) conf.maxHistoryMessages = effective.maxHistoryMessages;
     if (effective.maxToolCallRounds !== undefined && effective.maxToolCallRounds !== null) conf.maxToolCallRounds = effective.maxToolCallRounds;
     if (effective.sessionTimeout !== undefined && effective.sessionTimeout !== null) conf.sessionTimeout = effective.sessionTimeout;
@@ -200,14 +207,16 @@ export function normalizeString(str?: string | null): string {
   return str ? str.trim() : "";
 }
 
-// 判断协议/服务商是否兼容（OpenAI 生态系列视作兼容）
+// 判断协议/服务商是否兼容（OpenAI 生态系列视作兼容；anthropic-messages 与其余互不兼容）
 export function isProtocolCompatible(proto1?: string, proto2?: string): boolean {
   const p1 = (proto1 || "openai").toLowerCase().trim();
   const p2 = (proto2 || "openai").toLowerCase().trim();
   if (p1 === p2) return true;
   const openaiCompat = [
     "openai",
+    "openai-responses",
     "custom",
+    "gemini",
     "deepseek",
     "siliconflow",
     "openrouter",

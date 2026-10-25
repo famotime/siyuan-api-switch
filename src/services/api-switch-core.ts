@@ -5,7 +5,9 @@ import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
-import { PRESET_PROVIDERS } from "@/constants/providers";
+import { normalizeAiProtocol } from "@/utils/protocol";
+import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/constants/providers";
+import { migrateLegacyAiProtocols } from "./config-migration";
 
 export type { ApiProfile } from "./profile-store";
 export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo } from "./plugin-binding-manager";
@@ -14,7 +16,9 @@ export { extractSiyuanAiSettings };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
 export { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
-export { PRESET_PROVIDERS };
+export { PRESET_PROVIDERS, PRESET_PROVIDER_LIST };
+export type { PresetProviderInfo };
+export { normalizeAiProtocol } from "@/utils/protocol";
 
 export interface AutoProviderResult {
   provider: ApiProvider;
@@ -172,6 +176,14 @@ export class ApiSwitchCore {
         this.providerStore.setProviders(data.providers || []);
         this.profileStore.setProfiles(data.profiles || []);
         this.bindingManager.setBindings(data.bindings || {});
+        // 旧版协议值域（gemini/anthropic/custom）静默迁移为思源内核原生值域
+        const migrated = migrateLegacyAiProtocols(
+          this.providerStore.getProviders(),
+          this.profileStore.getProfiles()
+        );
+        if (migrated) {
+          await this.save();
+        }
       } else {
         this.providerStore.setProviders([]);
         this.profileStore.setProfiles([]);
@@ -380,7 +392,7 @@ export class ApiSwitchCore {
     const preset = PRESET_PROVIDERS[provKey];
     const effectiveBaseUrl = (profile.baseUrl || "").trim() || preset?.defaultBaseUrl || "";
     const effectiveApiKey = (profile.apiKey || "").trim();
-    const protocol = profile.protocol || preset?.protocol || "openai";
+    const protocol = normalizeAiProtocol(profile.protocol || preset?.protocol || "openai");
 
     // 收集所有候选模型去重
     const modelSet = new Set<string>();
@@ -881,7 +893,7 @@ export class ApiSwitchCore {
             enabled: rawP.enabled ?? true,
             baseUrl: extractBaseUrl(rawP),
             apiKey: extractApiKey(rawP),
-            protocol: rawP.protocol || "openai",
+            protocol: normalizeAiProtocol(rawP.protocol),
             requestTimeout: rawP.requestTimeout ?? 30,
             headers: rawP.headers || {},
             models: Array.isArray(rawP.models)

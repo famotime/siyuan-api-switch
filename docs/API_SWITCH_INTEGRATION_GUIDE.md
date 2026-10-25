@@ -28,8 +28,10 @@ export interface SharedConfig {
   model: string;
   /** 候选模型列表（可选） */
   models?: string[];
-  /** 通信协议（可选）："openai" | "gemini" | "anthropic" */
+  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages"（v0.10.0 起从旧值 gemini/anthropic/custom 迁移） */
   protocol?: string;
+  /** 当前模型上下文窗口容量 tokens（可选，v0.10.0 新增：来自 /v1/models 元数据、内置目录或主动探测） */
+  contextWindow?: number;
   /** 请求超时时间（秒，可选） */
   requestTimeoutSeconds?: number;
   /** 采样温度 (0.0 - 2.0，可选) */

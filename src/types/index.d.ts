@@ -2,15 +2,22 @@
  * 思源笔记 API 旋钮 (siyuan-api-switch) - 核心类型定义
  */
 
+/**
+ * 思源内核原生的 AI 提供商协议值域（kernel/conf/ai.go Protocol 字段）
+ * 旧版插件值 gemini/custom 已在读档时迁移：gemini→openai、custom→openai、anthropic→anthropic-messages
+ */
+export type AiProtocol = "openai" | "openai-responses" | "anthropic-messages";
+
 export interface SharedConfig {
   profileId: string;      // 绑定的 Profile ID
   profileName: string;    // Profile 的名称，如 "DeepSeek-Default"
   provider: string;       // 服务商标识，如 "deepseek", "openai", "siliconflow", "custom"
-  protocol?: string;      // 协议类型，如 "openai", "gemini", "anthropic"
+  protocol?: string;      // 协议类型：思源原生值 "openai" | "openai-responses" | "anthropic-messages"
   baseUrl: string;        // API 基础 URL
   apiKey: string;         // API 密钥
   model: string;          // 模型名称
   models?: string[];      // 候选模型列表
+  contextWindow?: number; // 当前模型的上下文窗口容量（tokens，来自提供商模型探测/内置目录）
   headers?: Record<string, string>; // 自定义 HTTP 请求头
   requestTimeoutSeconds?: number; // 请求超时时间（秒）
   temperature?: number;   // 采样温度
@@ -41,7 +48,7 @@ export interface ApiProvider {
   enabled?: boolean;
   apiKey: string;
   baseUrl: string;
-  protocol?: string;
+  protocol?: AiProtocol;
   requestTimeout?: number;
   headers?: Record<string, string>;
   models: ApiProviderModel[];
@@ -51,12 +58,13 @@ export interface ApiProfile {
   id: string;
   name: string;
   providerId?: string; // 关联的 API 提供商 ID
-  provider: string;    // 服务商标识或协议，如 openai, gemini, anthropic, siliconflow, custom
+  provider: string;    // 服务商标识，如 openai, deepseek, siliconflow, custom（决策模型固定 custom）
   protocol?: string;
   baseUrl: string;
   apiKey: string;
   model: string;
   models?: string[];
+  contextWindow?: number; // 显式覆盖的上下文窗口容量；缺省时从关联提供商模型继承
   headers?: Record<string, string>;
   requestTimeoutSeconds?: number;
   temperature?: number;

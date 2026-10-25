@@ -1,6 +1,7 @@
 import { fetchSyncPost } from "siyuan";
 import { ApiProvider, ApiProviderModel, SiyuanAiJson } from "@/types";
 import { ApiProfile } from "./profile-store";
+import { normalizeAiProtocol } from "@/utils/protocol";
 
 export interface SiyuanExtractedAiInfo {
   providerId?: string;
@@ -58,7 +59,7 @@ export function extractSiyuanAiSettings(aiConfig: any): {
       enabled: p.enabled ?? true,
       apiKey: extractApiKey(p),
       baseUrl: extractBaseUrl(p),
-      protocol: p.protocol || "openai",
+      protocol: normalizeAiProtocol(p.protocol),
       requestTimeout: p.requestTimeout ?? 30,
       headers: p.headers && typeof p.headers === "object" ? p.headers : {},
       models: pModels,
@@ -286,7 +287,7 @@ export class SiyuanAdapter {
               id: providerId,
               displayName: effective.name || "API Switch Provider",
               enabled: true,
-              protocol: effective.protocol || effective.provider || "openai",
+              protocol: normalizeAiProtocol(effective.protocol || effective.provider),
               models: [],
             };
             aiConfig.providers.push(targetProvider);
@@ -302,9 +303,8 @@ export class SiyuanAdapter {
           if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
             targetProvider.requestTimeout = effective.requestTimeoutSeconds;
           }
-          if (!targetProvider.protocol) {
-            targetProvider.protocol = effective.protocol || effective.provider || "openai";
-          }
+          // 协议值统一为内核原生值域（存量旧值 anthropic/gemini/custom 随接管一并修正）
+          targetProvider.protocol = normalizeAiProtocol(effective.protocol || effective.provider);
 
           if (!Array.isArray(targetProvider.models)) {
             targetProvider.models = [];
@@ -321,6 +321,10 @@ export class SiyuanAdapter {
             targetProvider.models.push(targetModel);
           } else {
             targetModel.enabled = true;
+          }
+          // 写回已知的上下文容量（刷新/探测所得），内核 Agent 会用它做输入预算裁剪
+          if (effective.contextWindow && effective.contextWindow > 0) {
+            targetModel.contextLength = effective.contextWindow;
           }
 
           if (Array.isArray(effective.models)) {
@@ -459,7 +463,7 @@ export class SiyuanAdapter {
               id: providerId,
               displayName: effective.name || "API Switch Provider",
               enabled: true,
-              protocol: effective.protocol || effective.provider || "openai",
+              protocol: normalizeAiProtocol(effective.protocol || effective.provider),
               models: [],
             };
             aiConfig.providers.push(targetProvider);
@@ -475,9 +479,8 @@ export class SiyuanAdapter {
           if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
             targetProvider.requestTimeout = effective.requestTimeoutSeconds;
           }
-          if (!targetProvider.protocol) {
-            targetProvider.protocol = effective.protocol || effective.provider || "openai";
-          }
+          // 协议值统一为内核原生值域（存量旧值 anthropic/gemini/custom 随接管一并修正）
+          targetProvider.protocol = normalizeAiProtocol(effective.protocol || effective.provider);
 
           if (!Array.isArray(targetProvider.models)) {
             targetProvider.models = [];
@@ -494,6 +497,10 @@ export class SiyuanAdapter {
             targetProvider.models.push(targetModel);
           } else {
             targetModel.enabled = true;
+          }
+          // 写回已知的上下文容量（刷新/探测所得），内核 Agent 会用它做输入预算裁剪
+          if (effective.contextWindow && effective.contextWindow > 0) {
+            targetModel.contextLength = effective.contextWindow;
           }
 
           if (Array.isArray(effective.models)) {

@@ -23,8 +23,8 @@
 ### 1. 统一顶栏入口与层次化架构 (Providers + Profiles)
 - 🌟 **顶栏快捷入口**：思源笔记顶部工具栏新增专属旋钮图标，随时随地一键唤出或关闭统一配置中心，告别多层设置菜单寻址。
 - **底层 API 提供商 (Providers)**：
-  - 统一维护模型底座供应商账号（例如 DeepSeek、OpenAI、Gemini、Claude、SiliconFlow 或自定义网关）。
-  - 集中配置 Base URL、API Key、通信协议（`openai` / `gemini` / `anthropic`）、超时时间、**自定义 HTTP Headers** 及支持的模型清单。
+  - 统一维护模型底座供应商账号（从预置目录一键添加，或自定义网关）。
+  - 集中配置 Base URL、API Key、通信协议（思源内核原生值域 `openai` / `openai-responses` / `anthropic-messages`）、超时时间、**自定义 HTTP Headers** 及支持的模型清单。
 - **上层场景配置 (Profiles)**：
   - **继承机制**：Profile 可直接下拉关联已配置的提供商，自动继承其通信参数与密钥，并直接从模型池中点选模型；
   - **独立定制**：亦可脱离提供商，单独设置定制化的 Base URL、Key、温度与 Token 限制；
@@ -67,6 +67,13 @@
 ### 6. 优雅的降级保护
 - 全局解耦设计：若未安装或停用 API 旋钮插件，所有子插件将完全无感地继续使用其自身独立的本地配置，绝不影响日常使用。
 
+### 7. 供应商预置目录与在线探测（刷新可用模型 / 测试链接 / 容量探测）
+- 📇 **预置供应商目录**：与思源笔记原生「设置 → AI → 供应商」完全一致的 17 家服务商预置（OpenAI、Anthropic、DeepSeek、Moonshot/Kimi、MiniMax 国际/国内、阿里百炼国际/国内、火山方舟、智谱 GLM、Gemini、Mistral、SiliconFlow、OpenRouter、Groq、Ollama、LM Studio）+ 自定义模板。点侧栏「+」即可从目录一键创建，预置自带协议感知 BaseURL（如 DeepSeek 的 Anthropic Messages 入口）与推荐模型池，填 Key 即用。
+- 🔄 **刷新可用模型**：调用思源内核 `/api/ai/listModels` 拉取服务商 `/v1/models` 真实清单，合并去重回填（不删除手动添加的模型）；请求全部由内核 Go 进程转发，无任何 CORS 问题（需思源 v3.7.0+）。
+- 🔌 **两级测试链接**：一级「测试链接」验证地址/密钥/网络连通（不消耗 tokens）；二级「深度测试」对选中模型发一条 `max_tokens=1` 的真实对话请求（消耗少量 tokens），验证模型名、余额与端到端可用性。
+- 📏 **模型上下文容量探测**：三级来源——服务商 `/v1/models` 元数据 > 内置快照目录（约 100 条主流模型，数据整理自公开 OpenRouter / models.dev 目录）> 主动探测（4k 起指数上探 + 二分逼进，最多 8 次请求、粒度 1k、单次超时 60s，探测前弹窗确认预计消耗）。容量以徽标常显于模型标签（如 `128k`），持久化到提供商配置，接管写回时同步至思源内核（内核 Agent 按其做输入预算裁剪），并经 `SharedConfig.contextWindow` 下发给子插件。
+- 🔁 **协议值域自动迁移**：存量配置中的旧协议值（`gemini` / `anthropic` / `custom`）读档时静默迁移为思源内核原生值域，并自动改写 Gemini 旧原生端点为其 OpenAI 兼容端点，修复旧版 anthropic 协议实际失效的隐患。
+
 ---
 
 ## 📦 已适配接管的插件与原生场景
@@ -108,8 +115,10 @@ export interface SharedConfig {
   model: string;
   /** 候选模型列表（可选） */
   models?: string[];
-  /** 通信协议（可选）："openai" | "gemini" | "anthropic" */
+  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages" */
   protocol?: string;
+  /** 当前模型上下文窗口容量 tokens（可选，来自 /v1/models 元数据或内置目录/主动探测） */
+  contextWindow?: number;
   /** 请求超时时间（秒，可选） */
   requestTimeoutSeconds?: number;
   /** 采样温度 (0.0 - 2.0，可选) */
@@ -362,6 +371,9 @@ npm run dev
 - 🔐 **思源内核 AES 密文解密与增量写回** ([`siyuan-sync-and-decision.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/siyuan-sync-and-decision.test.ts))：原生 Key 密文解密、编辑器与智能体独立解耦同步、已接管项精准增量写回与未接管项安全保护
 - 📐 **参数继承与有效 Profile 计算** ([`effective-profile.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/effective-profile.test.ts))：提供商参数级联继承、独立覆盖与优先级决策
 - 📦 **思源原生 `ai.json` 导入导出** ([`import-export.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/import-export.test.ts)、[`extract-siyuan-ai.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/extract-siyuan-ai.test.ts))：4 大原生根节点规范对齐、扩展元数据无损嵌入与旧版兼容转换
+- 🔄 **供应商探测：刷新模型/两级测试/容量探测** ([`provider-probe.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/provider-probe.test.ts))：内核端点草稿请求形态、上下文超限判定、指数上探+二分算法预算控制、硬错误立即中止、容量三级查询优先级
+- 📇 **预置目录与协议值域迁移** ([`protocol-and-presets.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/protocol-and-presets.test.ts))：镜像原生 18 项目录完整性、协议感知地址切换、旧协议值与 Gemini 旧端点静默迁移、决策模型 custom 标记保留
+- 📏 **上下文容量全链路** ([`context-length.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/context-length.test.ts))：Profile/Provider 容量继承与覆盖、`SharedConfig.contextWindow` 下发、写回思源时同步 `contextLength` 与原生协议值
 
 详细模块职责与分层设计请参阅 [docs/project-structure.md](docs/project-structure.md)。
 
