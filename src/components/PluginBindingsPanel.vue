@@ -8,9 +8,16 @@
     <div class="binding-content">
       <!-- 多槽位展示模式（如对话模型 + 决策模型双模式） -->
       <div v-if="plugin.slots && plugin.slots.length > 0" class="multi-slots-container">
-        <div class="card-status-info" :class="plugin.isBound ? 'bound-card' : 'unbound-card'" style="margin-bottom: 16px;">
+        <div
+          class="card-status-info"
+          :class="plugin.bindingState === 'full' ? 'bound-card' : (plugin.bindingState === 'partial' ? 'partial-card' : (plugin.isBound ? 'bound-card' : 'unbound-card'))"
+          style="margin-bottom: 16px;"
+        >
           <div class="status-title">
-            当前接管状态: <strong>{{ plugin.isBound ? '部分或全部槽位已接管' : '独立配置 (全部未接管)' }}</strong>
+            当前接管状态: 
+            <strong v-if="plugin.bindingState === 'full'">全部槽位已接管</strong>
+            <strong v-else-if="plugin.bindingState === 'partial'">部分槽位已接管 ({{ plugin.boundSlotsCount }}/{{ plugin.totalSlotsCount }})</strong>
+            <strong v-else>独立配置 (全部未接管)</strong>
           </div>
           <div class="status-desc">
             该插件支持双模型/多槽位配置。您可以为每个槽位独立绑定 API Profile 或使用插件本地配置。

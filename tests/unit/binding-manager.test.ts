@@ -147,13 +147,31 @@ describe("子插件注册、接管绑定与实时通知分发", () => {
     expect(matePlug?.slots?.[1].slotId).toBe("decision");
     expect(matePlug?.slots?.[1].isBound).toBe(true);
     expect(matePlug?.slots?.[1].boundProfileId).toBe("prof_decision");
+    expect(matePlug?.bindingState).toBe("full");
+    expect(matePlug?.boundSlotsCount).toBe(2);
+    expect(matePlug?.totalSlotsCount).toBe(2);
 
-    // 5. 解除决策槽位绑定
+    // 5. 解除决策槽位绑定（进入部分接管状态）
     await apiSwitchCore.bindPlugin("siyuan-mate", "", "decision");
     expect(callback).toHaveBeenLastCalledWith(null, "decision");
     expect(apiSwitchCore.getBoundSharedConfig("siyuan-mate", "decision")).toBeNull();
     // 对话槽位依然处于接管状态
     expect(apiSwitchCore.getBoundSharedConfig("siyuan-mate", "chat")?.model).toBe("gpt-4o");
+
+    const regAfterUnbindOne = apiSwitchCore.getRegisteredPlugins();
+    const matePartial = regAfterUnbindOne.find((p) => p.pluginId === "siyuan-mate");
+    expect(matePartial?.bindingState).toBe("partial");
+    expect(matePartial?.boundSlotsCount).toBe(1);
+    expect(matePartial?.totalSlotsCount).toBe(2);
+    expect(matePartial?.isBound).toBe(true);
+
+    // 6. 解除全部槽位绑定（进入 none 状态）
+    await apiSwitchCore.bindPlugin("siyuan-mate", "", "chat");
+    const regAfterUnbindAll = apiSwitchCore.getRegisteredPlugins();
+    const mateNone = regAfterUnbindAll.find((p) => p.pluginId === "siyuan-mate");
+    expect(mateNone?.bindingState).toBe("none");
+    expect(mateNone?.boundSlotsCount).toBe(0);
+    expect(mateNone?.isBound).toBe(false);
   });
 
   it("声明多槽位的插件即使存在顶层单绑定的历史残留，解绑槽位后也不会被顶层键污染", async () => {
@@ -182,5 +200,46 @@ describe("子插件注册、接管绑定与实时通知分发", () => {
     await apiSwitchCore.bindPlugin("multi-slot-legacy", "", "decision");
     expect(apiSwitchCore.getBoundSharedConfig("multi-slot-legacy", "decision")).toBeNull();
     expect((apiSwitchCore as any).bindings["multi-slot-legacy"]).toBeUndefined();
+  });
+
+  it("支持通过全局对象 window.siyuanApiSwitch.unbind 与 updateLocalConfig 双向同步", async () => {
+    (apiSwitchCore as any).mountGlobal();
+    const globalSwitch = (window as any).siyuanApiSwitch;
+    expect(globalSwitch).toBeDefined();
+
+    const callback = vi.fn();
+    globalSwitch.register(
+      "ext-plugin-demo",
+      "外部联动插件",
+      callback,
+      undefined,
+      {
+        slots: [
+          { id: "chat", name: "对话模型", localConfig: { baseUrl: "http://localhost:11434", model: "qwen2.5:1.5b", apiKey: "", provider: "ollama" } },
+          { id: "decision", name: "决策模型", localConfig: { baseUrl: "http://localhost:11434", model: "qwen-mini", apiKey: "", provider: "ollama" } },
+        ],
+      }
+    );
+
+    // 绑定决策槽位
+    await apiSwitchCore.bindPlugin("ext-plugin-demo", "prof_share", "decision");
+    expect(globalSwitch.getBoundConfig("ext-plugin-demo", "decision")?.model).toBe("gpt-4o");
+
+    // 外部主动调用 unbind 解除托管
+    await globalSwitch.unbind("ext-plugin-demo", "decision");
+    expect(globalSwitch.getBoundConfig("ext-plugin-demo", "decision")).toBeNull();
+    expect(callback).toHaveBeenLastCalledWith(null, "decision");
+
+    // 外部主动更新本地配置
+    globalSwitch.updateLocalConfig("ext-plugin-demo", {
+      baseUrl: "https://api.openai.com/v1",
+      model: "gpt-4o",
+      apiKey: "sk-real",
+      provider: "openai",
+    }, "decision");
+
+    const reg = (apiSwitchCore as any).getRegisteredPlugins().find((p: any) => p.pluginId === "ext-plugin-demo");
+    const decisionSlot = reg?.slots?.find((s: any) => s.slotId === "decision");
+    expect(decisionSlot?.localConfig?.model).toBe("gpt-4o");
   });
 });

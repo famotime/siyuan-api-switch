@@ -511,6 +511,11 @@
       color: var(--sw-ok-text);
     }
 
+    &.partial {
+      background-color: rgba(250, 140, 22, 0.15);
+      color: #fa8c16;
+    }
+
     &.unbound {
       background-color: rgba(158, 158, 158, 0.12);
       color: var(--b3-theme-on-surface-mute, #9e9e9e);
@@ -747,6 +752,14 @@
     border-color: rgba(76, 175, 80, 0.2);
     .status-title strong {
       color: var(--b3-theme-success, #4caf50);
+    }
+  }
+
+  &.partial-card {
+    background-color: rgba(250, 140, 22, 0.08);
+    border-color: rgba(250, 140, 22, 0.25);
+    .status-title strong {
+      color: #fa8c16;
     }
   }
 

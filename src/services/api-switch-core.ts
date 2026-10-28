@@ -1,5 +1,5 @@
 import { Plugin } from "siyuan";
-import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions } from "@/types";
+import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions, PluginBindingState } from "@/types";
 import { ProviderStore } from "./provider-store";
 import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
@@ -10,7 +10,7 @@ import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/co
 import { migrateLegacyAiProtocols } from "./config-migration";
 
 export type { ApiProfile } from "./profile-store";
-export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo } from "./plugin-binding-manager";
+export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo, PluginBindingState } from "./plugin-binding-manager";
 export type { RegisterPluginOptions } from "@/types";
 export { extractSiyuanAiSettings };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
@@ -248,6 +248,15 @@ export class ApiSwitchCore {
       getBoundConfig: (pluginId, slotId) => {
         return this.getBoundSharedConfig(pluginId, slotId);
       },
+      unbind: async (pluginId, slotId) => {
+        await this.bindPlugin(pluginId, "", slotId);
+      },
+      updateLocalConfig: (pluginId, localConfig, slotId) => {
+        const updated = this.bindingManager.updateLocalConfig(pluginId, localConfig, slotId);
+        if (updated && this.onStateChange) {
+          this.onStateChange();
+        }
+      },
     };
 
     window.siyuanApiSwitch = manager;
@@ -299,6 +308,21 @@ export class ApiSwitchCore {
   private unregisterPlugin(pluginId: string) {
     this.bindingManager.unregisterPlugin(pluginId);
     if (this.onStateChange) {
+      this.onStateChange();
+    }
+  }
+
+  public async unbindPlugin(pluginId: string, slotId?: string) {
+    await this.bindPlugin(pluginId, "", slotId);
+  }
+
+  public updatePluginLocalConfig(
+    pluginId: string,
+    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
+    slotId?: string
+  ) {
+    const updated = this.bindingManager.updateLocalConfig(pluginId, localConfig, slotId);
+    if (updated && this.onStateChange) {
       this.onStateChange();
     }
   }
@@ -1131,14 +1155,31 @@ export class ApiSwitchCore {
         });
       }
 
-      const isAnySlotBound = slotInfos && slotInfos.length > 0
-        ? slotInfos.some((s) => s.isBound)
-        : Boolean(boundId);
+      let bindingState: PluginBindingState = "none";
+      let boundSlotsCount = 0;
+      let totalSlotsCount = 0;
+
+      if (slotInfos && slotInfos.length > 0) {
+        totalSlotsCount = slotInfos.length;
+        boundSlotsCount = slotInfos.filter((s) => s.isBound).length;
+        if (boundSlotsCount === totalSlotsCount) {
+          bindingState = "full";
+        } else if (boundSlotsCount > 0) {
+          bindingState = "partial";
+        } else {
+          bindingState = "none";
+        }
+      } else {
+        bindingState = boundId ? "full" : "none";
+      }
 
       list.push({
         pluginId,
         displayName: reg.displayName,
-        isBound: isAnySlotBound,
+        isBound: bindingState !== "none",
+        bindingState,
+        boundSlotsCount,
+        totalSlotsCount,
         boundProfileId: boundId,
         localConfig: reg.localConfig,
         matchedProfileId,
@@ -1175,6 +1216,7 @@ export class ApiSwitchCore {
       pluginId: "siyuan_builtin_editing",
       displayName: "思源笔记 API-编辑器",
       isBound: Boolean(editingBoundId),
+      bindingState: Boolean(editingBoundId) ? "full" : "none",
       boundProfileId: editingBoundId,
       localConfig: extracted.editing || undefined,
       matchedProfileId: editingMatchedId,
@@ -1196,6 +1238,7 @@ export class ApiSwitchCore {
       pluginId: "siyuan_builtin_agent",
       displayName: "思源笔记 API-智能体",
       isBound: Boolean(agentBoundId),
+      bindingState: Boolean(agentBoundId) ? "full" : "none",
       boundProfileId: agentBoundId,
       localConfig: extracted.agent || undefined,
       matchedProfileId: agentMatchedId,
@@ -1217,6 +1260,7 @@ export class ApiSwitchCore {
       pluginId: "siyuan_builtin_decision",
       displayName: "思源笔记 API-决策模型",
       isBound: Boolean(decisionBoundId),
+      bindingState: Boolean(decisionBoundId) ? "full" : "none",
       boundProfileId: decisionBoundId,
       localConfig: extracted.decision || undefined,
       matchedProfileId: decisionMatchedId,

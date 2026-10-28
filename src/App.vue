@@ -182,8 +182,8 @@
                     <div class="plugin-item-info">
                       <div class="plugin-item-header">
                         <span class="plugin-name">{{ plug.displayName }}</span>
-                        <span :class="['status-badge', plug.isBound ? 'bound' : 'unbound']">
-                          {{ plug.isBound ? '已接管' : '独立配置' }}
+                        <span :class="['status-badge', plug.bindingState === 'partial' ? 'partial' : (plug.isBound ? 'bound' : 'unbound')]">
+                          {{ plug.bindingState === 'partial' ? '部分接管' : (plug.isBound ? '已接管' : '独立配置') }}
                         </span>
                       </div>
                       <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>

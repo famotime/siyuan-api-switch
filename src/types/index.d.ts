@@ -126,6 +126,8 @@ export interface SiyuanAiJson {
   };
 }
 
+export type PluginBindingState = "full" | "partial" | "none";
+
 export interface PluginSlotDefinition {
   id: string;               // 槽位唯一标识，例如 "chat" | "decision"
   name: string;             // 槽位显示名称，例如 "对话模型" | "决策模型"
@@ -163,6 +165,14 @@ export interface SiyuanApiSwitch {
   ): void;
   unregister(pluginId: string): void;
   getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
+  /** 子插件主动请求解除托管某个槽位或整插件接管 */
+  unbind(pluginId: string, slotId?: string): Promise<void>;
+  /** 子插件上报最新的本地配置，用于 API 旋钮面板实时检测与匹配 */
+  updateLocalConfig(
+    pluginId: string,
+    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
+    slotId?: string
+  ): void;
 }
 
 export enum SyFrontendTypes {

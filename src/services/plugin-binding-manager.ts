@@ -1,11 +1,14 @@
-import { SharedConfig, PluginSlotDefinition, RegisteredPluginSlotInfo } from "@/types";
+import { SharedConfig, PluginSlotDefinition, RegisteredPluginSlotInfo, PluginBindingState } from "@/types";
 
-export type { PluginSlotDefinition, RegisteredPluginSlotInfo };
+export type { PluginSlotDefinition, RegisteredPluginSlotInfo, PluginBindingState };
 
 export interface RegisteredPluginInfo {
   pluginId: string;
   displayName: string;
   isBound: boolean;
+  bindingState: PluginBindingState;
+  boundSlotsCount?: number;
+  totalSlotsCount?: number;
   boundProfileId: string;
   localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
   matchedProfileId?: string;
@@ -130,6 +133,28 @@ export class PluginBindingManager {
   unregisterPlugin(pluginId: string) {
     this.registrations.delete(pluginId);
     this.log(`Plugin unregistered: ${pluginId}`);
+  }
+
+  updateLocalConfig(
+    pluginId: string,
+    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
+    slotId?: string
+  ): boolean {
+    const reg = this.registrations.get(pluginId);
+    if (!reg) return false;
+
+    if (slotId && reg.slots && reg.slots.length > 0) {
+      const slot = reg.slots.find((s) => s.id === slotId);
+      if (slot) {
+        slot.localConfig = localConfig;
+        this.log(`Updated localConfig for slot ${slotId} of plugin ${pluginId}`);
+        return true;
+      }
+    }
+
+    reg.localConfig = localConfig;
+    this.log(`Updated localConfig for plugin ${pluginId}`);
+    return true;
   }
 
   notifyPluginUpdate(pluginId: string, config: SharedConfig | null, slotId?: string) {
