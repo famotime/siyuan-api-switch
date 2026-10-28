@@ -44,6 +44,10 @@ export class PluginBindingManager {
 
   getBoundProfileId(pluginId: string, slotId?: string): string | undefined {
     if (slotId) {
+      const reg = this.registrations.get(pluginId);
+      if (reg && reg.slots && reg.slots.length > 0) {
+        return this.bindings[`${pluginId}:${slotId}`];
+      }
       return this.bindings[`${pluginId}:${slotId}`] || this.bindings[pluginId];
     }
     return this.bindings[pluginId];
@@ -52,6 +56,10 @@ export class PluginBindingManager {
   removeBinding(pluginId: string, slotId?: string) {
     if (slotId) {
       delete this.bindings[`${pluginId}:${slotId}`];
+      const reg = this.registrations.get(pluginId);
+      if (reg && reg.slots && reg.slots.length > 0 && this.bindings[pluginId]) {
+        delete this.bindings[pluginId];
+      }
     } else {
       delete this.bindings[pluginId];
       // 清理该插件关联的所有槽位键

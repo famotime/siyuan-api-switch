@@ -155,4 +155,32 @@ describe("子插件注册、接管绑定与实时通知分发", () => {
     // 对话槽位依然处于接管状态
     expect(apiSwitchCore.getBoundSharedConfig("siyuan-mate", "chat")?.model).toBe("gpt-4o");
   });
+
+  it("声明多槽位的插件即使存在顶层单绑定的历史残留，解绑槽位后也不会被顶层键污染", async () => {
+    const callback = vi.fn();
+    apiSwitchCore.registerPlugin(
+      "multi-slot-legacy",
+      "多槽位残留测试插件",
+      callback,
+      undefined,
+      [
+        { id: "chat", name: "对话模型" },
+        { id: "decision", name: "决策模型" },
+      ]
+    );
+
+    // 模拟旧版本留存的顶层绑定
+    (apiSwitchCore as any).bindings["multi-slot-legacy"] = "prof_share";
+    // 槽位未绑定时，由于明确声明了多槽位，槽位查询绝不能 fallback 到顶层绑定
+    expect(apiSwitchCore.getBoundSharedConfig("multi-slot-legacy", "decision")).toBeNull();
+    expect(apiSwitchCore.getBoundSharedConfig("multi-slot-legacy", "chat")).toBeNull();
+
+    // 绑定并随后解除槽位绑定，残留顶层绑定会被安全清理
+    await apiSwitchCore.bindPlugin("multi-slot-legacy", "prof_share", "decision");
+    expect(apiSwitchCore.getBoundSharedConfig("multi-slot-legacy", "decision")?.model).toBe("gpt-4o");
+
+    await apiSwitchCore.bindPlugin("multi-slot-legacy", "", "decision");
+    expect(apiSwitchCore.getBoundSharedConfig("multi-slot-legacy", "decision")).toBeNull();
+    expect((apiSwitchCore as any).bindings["multi-slot-legacy"]).toBeUndefined();
+  });
 });
