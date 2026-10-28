@@ -252,6 +252,24 @@ async function sendProbeRequest(
       max_tokens: 1,
       messages: [{ role: "user", content: buildFillerContent(targetTokens) }],
     };
+  } else if (protocol === "systemone") {
+    // TypeSafe System One (Jev) 原生决策端点：POST /systemone
+    url = /\/systemone$/i.test(baseUrl) ? baseUrl : `${baseUrl}/systemone`;
+    headers = [
+      { "content-type": "application/json" },
+      { "Authorization": `Bearer ${(draft.apiKey || "").trim()}` },
+    ];
+    payload = {
+      model: model || "jev-latest",
+      state: { user_query: "ping" },
+      questions: {
+        ping: {
+          type: "choice",
+          instructions: "connectivity probe",
+          criteria: { ok: "ok", none: "none" },
+        },
+      },
+    };
   } else {
     url = `${baseUrl}/chat/completions`;
     headers = [

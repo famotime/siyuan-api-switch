@@ -814,6 +814,7 @@ const getProviderName = (provider: string) => {
   if (preset) return preset.displayName
   const dict: Record<string, string> = {
     custom: "自定义",
+    systemone: "Jev 决策模型",
   }
   return dict[provider] || provider || "未知"
 }

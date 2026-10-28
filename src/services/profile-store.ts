@@ -281,19 +281,20 @@ export function isProfileConfigMatching(
   }
 
   // 5. 模型比对
-  if (!profileIsDecision) {
-    const profModel = normalizeString(effectiveProfile.model);
-    const targetModel = normalizeString(targetConfig.model || targetConfig.modelId);
-    if (!profModel || !targetModel) {
-      return { isMatch: false, isExact: false, score: 0 };
-    }
-    if (profModel.toLowerCase() !== targetModel.toLowerCase()) {
-      return { isMatch: false, isExact: false, score: 0 };
+  const profModel = normalizeString(effectiveProfile.model);
+  const targetModel = normalizeString(
+    targetConfig.model || targetConfig.modelId || targetConfig.name
+  );
+  if (profileIsDecision) {
+    // 决策模型：若任意一方有指定模型，则双方均需指定且不区分大小写一致
+    if (profModel || targetModel) {
+      if (!profModel || !targetModel || profModel.toLowerCase() !== targetModel.toLowerCase()) {
+        return { isMatch: false, isExact: false, score: 0 };
+      }
     }
   } else {
-    const profModel = normalizeString(effectiveProfile.model);
-    const targetModel = normalizeString(targetConfig.model || targetConfig.modelId || targetConfig.name);
-    if (profModel && targetModel && profModel.toLowerCase() !== targetModel.toLowerCase()) {
+    // 非决策模型：必须均指定模型且完全一致
+    if (!profModel || !targetModel || profModel.toLowerCase() !== targetModel.toLowerCase()) {
       return { isMatch: false, isExact: false, score: 0 };
     }
   }
@@ -302,8 +303,6 @@ export function isProfileConfigMatching(
   let score = 80;
   let exactBonus = true;
 
-  const profModel = normalizeString(effectiveProfile.model);
-  const targetModel = normalizeString(targetConfig.model || targetConfig.modelId);
   if (profModel === targetModel) {
     score += 5;
   } else {

@@ -8,13 +8,23 @@
  */
 import { AiProtocol } from "@/types";
 
-export const NATIVE_PROTOCOLS: AiProtocol[] = ["openai", "openai-responses", "anthropic-messages"];
+export const NATIVE_PROTOCOLS: AiProtocol[] = [
+  "openai",
+  "openai-responses",
+  "anthropic-messages",
+  "systemone",
+];
 
 const LEGACY_PROTOCOL_MAP: Record<string, AiProtocol> = {
   // 原生值直接放行
   openai: "openai",
   "openai-responses": "openai-responses",
   "anthropic-messages": "anthropic-messages",
+  systemone: "systemone",
+  // Jev / TypeSafe 决策模型别名规范化
+  "system-one": "systemone",
+  jev: "systemone",
+  typesafe: "systemone",
   // 旧值迁移：Gemini 走其 OpenAI 兼容端点；Anthropic 对齐 Messages 协议；custom 视作 OpenAI 兼容
   gemini: "openai",
   anthropic: "anthropic-messages",

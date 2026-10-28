@@ -163,6 +163,7 @@ const getProviderName = (provider: string) => {
     siliconflow: "SiliconFlow",
     openai: "OpenAI",
     custom: "自定义",
+    systemone: "Jev 决策模型",
   };
   return dict[provider] || provider || "未知";
 };

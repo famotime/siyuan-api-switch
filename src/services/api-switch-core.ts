@@ -1316,6 +1316,12 @@ export class ApiSwitchCore {
     const match = this.findMatchingProfile(lc);
     if (match) {
       const matchedProfile = match.profile;
+      // 防御加固：如果待导入的本地配置有真实 apiKey，但匹配到的 Profile 缺失有效 apiKey，自动补全并保存，防止空壳接管
+      const effectiveMatched = this.resolveEffectiveProfile(matchedProfile);
+      if (lc.apiKey && !effectiveMatched.apiKey) {
+        matchedProfile.apiKey = lc.apiKey;
+        await this.updateProfile(matchedProfile);
+      }
       await this.bindPlugin(pluginId, matchedProfile.id, slotId);
       this.log(`Matched existing profile '${matchedProfile.name}' for ${pluginId}${slotId ? `:${slotId}` : ""}, reused without duplication.`);
       return {

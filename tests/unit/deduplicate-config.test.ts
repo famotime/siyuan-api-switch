@@ -35,6 +35,10 @@ describe("配置一致性校验与防重复配置机制", () => {
       // anthropic-messages 是独立线路协议，与 OpenAI 生态互不兼容
       expect(isProtocolCompatible("anthropic-messages", "openai")).toBe(false);
       expect(isProtocolCompatible("anthropic", "gemini")).toBe(false);
+      // systemone 决策模型为独立专属协议，仅与自身兼容
+      expect(isProtocolCompatible("systemone", "systemone")).toBe(true);
+      expect(isProtocolCompatible("systemone", "openai")).toBe(false);
+      expect(isProtocolCompatible("systemone", "anthropic-messages")).toBe(false);
     });
   });
 
@@ -110,6 +114,59 @@ describe("配置一致性校验与防重复配置机制", () => {
       };
       // baseEffective 不是决策模型，所以不匹配
       expect(isProfileConfigMatching(baseEffective, decisionTarget).isMatch).toBe(false);
+    });
+
+    it("决策模型：模型不一致或某一方未指定模型时判定为不匹配", () => {
+      const decisionProfile: ApiProfile = {
+        id: "prof_decision",
+        name: "默认决策模型",
+        provider: "openai",
+        protocol: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-decision-key",
+        model: "gpt-4o-mini",
+        isDecisionModel: true,
+      };
+
+      // 目标模型不同
+      const targetDiffModel = {
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-decision-key",
+        model: "deepseek-chat",
+        isDecisionModel: true,
+      };
+      expect(isProfileConfigMatching(decisionProfile, targetDiffModel).isMatch).toBe(false);
+
+      // 目标未指定模型
+      const targetNoModel = {
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-decision-key",
+        model: "",
+        isDecisionModel: true,
+      };
+      expect(isProfileConfigMatching(decisionProfile, targetNoModel).isMatch).toBe(false);
+    });
+
+    it("本地配置有 API Key 而已有 Profile API Key 为空时严格判定为不匹配", () => {
+      const emptyKeyProfile: ApiProfile = {
+        id: "prof_empty_key",
+        name: "空壳决策模型",
+        provider: "openai",
+        protocol: "openai",
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "",
+        model: "gpt-4o-mini",
+        isDecisionModel: true,
+      };
+
+      const realKeyTarget = {
+        baseUrl: "https://api.openai.com/v1",
+        apiKey: "sk-real-key-999",
+        model: "gpt-4o-mini",
+        isDecisionModel: true,
+      };
+
+      expect(isProfileConfigMatching(emptyKeyProfile, realKeyTarget).isMatch).toBe(false);
     });
   });
 
@@ -196,6 +253,57 @@ describe("配置一致性校验与防重复配置机制", () => {
       expect(res?.profile.providerId).toBe(prov.id); // 成功复用提供商
       expect(res?.profile.model).toBe("gpt-4o-mini");
       expect(apiSwitchCore.getProfiles()).toHaveLength(1);
+    });
+
+    it("带槽位插件导入决策模型本地配置时，完整持久化其 apiKey 并广播有效配置", async () => {
+      let notifiedConfig: any = null;
+
+      (apiSwitchCore as any).registerPlugin(
+        "siyuan-mate",
+        "思源灵犀",
+        (conf: any, slotId?: string) => {
+          if (slotId === "decision") {
+            notifiedConfig = conf;
+          }
+        },
+        undefined,
+        [
+          {
+            id: "chat",
+            name: "对话模型",
+            localConfig: {
+              provider: "openai",
+              baseUrl: "https://api.openai.com/v1",
+              apiKey: "sk-mate-chat",
+              model: "gpt-4o",
+            },
+          },
+          {
+            id: "decision",
+            name: "决策模型",
+            localConfig: {
+              provider: "custom",
+              protocol: "openai",
+              baseUrl: "https://api.deepseek.com/v1",
+              apiKey: "sk-mate-decision-key",
+              model: "deepseek-chat",
+              temperature: 0.1,
+              isDecisionModel: true,
+            },
+          },
+        ]
+      );
+
+      const res = await apiSwitchCore.importLocalConfigToProfile("siyuan-mate", "decision");
+      expect(res?.action).toBe("created");
+      expect(res?.profile.model).toBe("deepseek-chat");
+      expect(res?.profile.apiKey).toBe("sk-mate-decision-key");
+      expect(res?.profile.isDecisionModel).toBe(true);
+
+      // 验证绑定并广播给槽位的配置中包含有效的 apiKey
+      expect(notifiedConfig).not.toBeNull();
+      expect(notifiedConfig.apiKey).toBe("sk-mate-decision-key");
+      expect(notifiedConfig.model).toBe("deepseek-chat");
     });
   });
 

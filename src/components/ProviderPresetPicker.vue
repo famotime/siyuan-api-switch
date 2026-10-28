@@ -68,6 +68,7 @@ const groups = computed(() => {
 const protocolLabel = (protocol: string) => {
   if (protocol === "anthropic-messages") return "Anthropic Messages";
   if (protocol === "openai-responses") return "OpenAI Responses";
+  if (protocol === "systemone") return "System One (Jev)";
   return "OpenAI 兼容";
 };
 </script>

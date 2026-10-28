@@ -3,16 +3,16 @@
  */
 
 /**
- * 思源内核原生的 AI 提供商协议值域（kernel/conf/ai.go Protocol 字段）
+ * 思源内核原生的 AI 提供商协议值域与扩展协议（kernel/conf/ai.go Protocol 字段 + Jev/SystemOne 扩展）
  * 旧版插件值 gemini/custom 已在读档时迁移：gemini→openai、custom→openai、anthropic→anthropic-messages
  */
-export type AiProtocol = "openai" | "openai-responses" | "anthropic-messages";
+export type AiProtocol = "openai" | "openai-responses" | "anthropic-messages" | "systemone";
 
 export interface SharedConfig {
   profileId: string;      // 绑定的 Profile ID
   profileName: string;    // Profile 的名称，如 "DeepSeek-Default"
   provider: string;       // 服务商标识，如 "deepseek", "openai", "siliconflow", "custom"
-  protocol?: string;      // 协议类型：思源原生值 "openai" | "openai-responses" | "anthropic-messages"
+  protocol?: string;      // 协议类型："openai" | "openai-responses" | "anthropic-messages" | "systemone"
   baseUrl: string;        // API 基础 URL
   apiKey: string;         // API 密钥
   model: string;          // 模型名称

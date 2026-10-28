@@ -12,10 +12,14 @@ import { migrateLegacyAiProtocols } from "@/services/config-migration";
 import { ApiProvider, ApiProfile } from "@/types";
 
 describe("协议值域规范化 (normalizeAiProtocol)", () => {
-  it("原生三值原样放行", () => {
+  it("原生协议放行（含 systemone 原生放行与 Jev/TypeSafe 别名映射）", () => {
     expect(normalizeAiProtocol("openai")).toBe("openai");
     expect(normalizeAiProtocol("openai-responses")).toBe("openai-responses");
     expect(normalizeAiProtocol("anthropic-messages")).toBe("anthropic-messages");
+    expect(normalizeAiProtocol("systemone")).toBe("systemone");
+    expect(normalizeAiProtocol("system-one")).toBe("systemone");
+    expect(normalizeAiProtocol("jev")).toBe("systemone");
+    expect(normalizeAiProtocol("typesafe")).toBe("systemone");
   });
 
   it("旧值静默迁移：gemini/custom→openai、anthropic→anthropic-messages", () => {

@@ -16,6 +16,7 @@
             <option value="openai">OpenAI 兼容 (Chat Completions)</option>
             <option value="openai-responses">OpenAI Responses</option>
             <option value="anthropic-messages">Anthropic Messages</option>
+            <option value="systemone">TypeSafe System One (Jev 决策模型)</option>
           </select>
         </div>
       </div>
@@ -117,7 +118,7 @@
               type="text"
               class="b3-text-field mini-input"
               v-model="newModelInput"
-              placeholder="输入新模型名称 (如 deepseek-chat)，按回车添加"
+              :placeholder="localProvider.protocol === 'systemone' ? '输入新模型名称 (如 jev-latest)，按回车添加' : '输入新模型名称 (如 deepseek-chat)，按回车添加'"
               @keyup.enter="addModel"
             />
             <button class="b3-button b3-button--primary mini-btn" @click="addModel" type="button">添加</button>
@@ -254,6 +255,14 @@ const onProtocolChange = () => {
     localProvider.value.baseUrl,
     (localProvider.value.protocol || "openai") as AiProtocol
   );
+  // 当切换为 systemone 协议且当前无任何模型时，提供默认模型建议
+  if (
+    localProvider.value.protocol === "systemone" &&
+    (!localProvider.value.models || localProvider.value.models.length === 0) &&
+    !newModelInput.value
+  ) {
+    newModelInput.value = "jev-latest";
+  }
 };
 
 const removeModel = (index: number) => {
