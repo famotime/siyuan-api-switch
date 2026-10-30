@@ -259,3 +259,141 @@ describe("主动探测上下文容量 (probeModelContextLength)", () => {
     expect(result.requests).toBe(5);
   });
 });
+
+describe("决策模型 (System One / Jev) 独立探测机制", () => {
+  const systemOneDraft = {
+    displayName: "TokenDance Jev",
+    baseUrl: "https://tokendance.space/gateway/typesafe/v1/systemone",
+    apiKey: "sk-tokendance",
+    protocol: "systemone",
+    models: [{ id: "bocha-jev-v1", name: "bocha-jev-v1" }],
+  };
+
+  it("协议识别与端点自动规范化", async () => {
+    const { isSystemOneProtocol, resolveSystemOneEndpoint } = await import("@/services/provider-probe");
+    expect(isSystemOneProtocol(systemOneDraft)).toBe(true);
+    expect(isSystemOneProtocol({ ...systemOneDraft, protocol: "openai" })).toBe(true); // url 含 systemone
+    expect(isSystemOneProtocol({ ...systemOneDraft, baseUrl: "https://api.example.com", protocol: "jev" })).toBe(true);
+    expect(isSystemOneProtocol({ ...systemOneDraft, baseUrl: "https://api.example.com", protocol: "openai" })).toBe(false);
+
+    expect(resolveSystemOneEndpoint("https://api.typesafe.ai/v1/systemone")).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(resolveSystemOneEndpoint("https://api.typesafe.ai/v1")).toBe("https://api.typesafe.ai/v1/systemone");
+    expect(resolveSystemOneEndpoint("https://api.typesafe.ai/v1/systemone/")).toBe("https://api.typesafe.ai/v1/systemone");
+  });
+
+  it("一级连通性测试：经 forwardProxy 发送轻量 Schema 探针，422 视为成功 (0 tokens)", async () => {
+    let capturedUrl = "";
+    let capturedPayload: any = null;
+    setFetchHandler((url, data) => {
+      capturedUrl = url;
+      capturedPayload = data;
+      return {
+        code: 0,
+        msg: "",
+        data: {
+          status: 422,
+          body: JSON.stringify({ detail: [{ msg: "Field required", loc: ["body", "state"] }] }),
+        },
+      };
+    });
+
+    const res = await testProviderConnection(systemOneDraft);
+    expect(capturedUrl).toBe("/api/network/forwardProxy");
+    expect(capturedPayload.url).toBe("https://tokendance.space/gateway/typesafe/v1/systemone");
+    expect(capturedPayload.payload).toEqual({ model: "bocha-jev-v1" });
+    expect(res.ok).toBe(true);
+    expect(res.message).toContain("零 Token 探针");
+  });
+
+  it("一级连通性测试：401 判定鉴权失败，404 判定端点未找到", async () => {
+    setFetchHandler(() => ({
+      code: 0,
+      msg: "",
+      data: { status: 401, body: "Unauthorized" },
+    }));
+    const res401 = await testProviderConnection(systemOneDraft);
+    expect(res401.ok).toBe(false);
+    expect(res401.message).toContain("鉴权失败");
+
+    setFetchHandler(() => ({
+      code: 0,
+      msg: "",
+      data: { status: 404, body: "Not Found" },
+    }));
+    const res404 = await testProviderConnection(systemOneDraft);
+    expect(res404.ok).toBe(false);
+    expect(res404.message).toContain("端点未找到");
+  });
+
+  it("二级深度测试：发送极简 noul 决策请求，200 返回真假概率与 tokens", async () => {
+    let capturedPayload: any = null;
+    setFetchHandler((url, data) => {
+      capturedPayload = data;
+      return {
+        code: 0,
+        msg: "",
+        data: {
+          status: 200,
+          body: JSON.stringify({
+            model: "bocha-jev-v1",
+            answers: { probe: { type: "noul", noul: 0.84 } },
+            usage: { input_tokens: 99, output_tokens: 0 },
+          }),
+        },
+      };
+    });
+
+    const res = await testProviderModel(systemOneDraft, "bocha-jev-v1");
+    expect(capturedPayload.url).toBe("https://tokendance.space/gateway/typesafe/v1/systemone");
+    expect(capturedPayload.payload.questions.probe.type).toBe("noul");
+    expect(res.ok).toBe(true);
+    expect(res.message).toContain("深度测试通过");
+    expect(res.message).toContain("99 tokens");
+    expect(res.message).toContain("0.840");
+  });
+
+  it("模型刷新：自动嗅探 TokenDance 主网关并筛选 supported_protocols 包含 systemone 的模型", async () => {
+    let capturedProbeUrl = "";
+    setFetchHandler((url, data) => {
+      capturedProbeUrl = data.url;
+      return {
+        code: 0,
+        msg: "",
+        data: {
+          status: 200,
+          body: JSON.stringify({
+            data: [
+              { id: "gpt-4o", supported_protocols: ["openai:chat-completions"] },
+              { id: "bocha-jev-v1", supported_protocols: ["typesafe:systemone"], context_length: 32000 },
+              { id: "ateve-jev-v1", supported_protocols: ["typesafe:systemone"], context_length: 32000 },
+            ],
+          }),
+        },
+      };
+    });
+
+    const res = await fetchProviderModels(systemOneDraft);
+    expect(capturedProbeUrl).toBe("https://tokendance.space/gateway/v1/models");
+    expect(res.models).toEqual(["ateve-jev-v1", "bocha-jev-v1"]);
+    expect(res.contextLengths["bocha-jev-v1"]).toBe(32000);
+  });
+
+  it("模型刷新兜底：网关无相应接口或请求失败时回退为默认决策模型池，不报错 404", async () => {
+    setFetchHandler(() => ({
+      code: 0,
+      msg: "",
+      data: { status: 404, body: "Not Found" },
+    }));
+
+    const res = await fetchProviderModels({
+      baseUrl: "https://api.typesafe.ai/v1/systemone",
+      apiKey: "sk-xyz",
+      protocol: "systemone",
+      models: [{ name: "my-custom-jev" }],
+    });
+
+    expect(res.models).toContain("bocha-jev-v1");
+    expect(res.models).toContain("my-custom-jev");
+    expect(res.contextLengths["bocha-jev-v1"]).toBe(32000);
+  });
+});

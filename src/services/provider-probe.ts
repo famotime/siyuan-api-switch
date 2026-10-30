@@ -17,6 +17,7 @@ export interface ProviderDraft {
   protocol?: string;
   requestTimeout?: number;
   headers?: Record<string, string>;
+  models?: Array<{ id?: string; name?: string; [key: string]: any }>;
 }
 
 export interface ModelsFetchResult {
@@ -80,6 +81,313 @@ function extractKernelError(res: any, fallback: string): string {
   return msg || fallback;
 }
 
+/** 判断是否为 System One (Jev) 决策模型协议 */
+export function isSystemOneProtocol(draft: ProviderDraft): boolean {
+  const proto = normalizeAiProtocol(draft.protocol);
+  if (proto === "systemone") return true;
+  const baseUrl = (draft.baseUrl || "").trim().toLowerCase();
+  return /\/systemone(\/|$)/i.test(baseUrl);
+}
+
+/** 格式化 System One 端点完整 URL */
+export function resolveSystemOneEndpoint(baseUrl: string): string {
+  const clean = (baseUrl || "").trim().replace(/\/+$/, "");
+  return /\/systemone$/i.test(clean) ? clean : `${clean}/systemone`;
+}
+
+/** 内置默认 System One 推荐模型与上下文容量 */
+const DEFAULT_SYSTEMONE_MODELS = ["bocha-jev-v1", "ateve-jev-v1", "jev-latest"];
+const DEFAULT_SYSTEMONE_CONTEXTS: Record<string, number> = {
+  "bocha-jev-v1": 32000,
+  "ateve-jev-v1": 32000,
+  "jev-latest": 32000,
+};
+
+/**
+ * 决策模型专用：拉取/刷新可用模型
+ * 优先嗅探 TokenDance 等多协议网关的主目录 /gateway/v1/models 并提取 systemone 支持模型；
+ * 若未命中或服务商不支持则回退为内置决策模型推荐池。
+ */
+export async function fetchSystemOneModels(draft: ProviderDraft): Promise<ModelsFetchResult> {
+  const baseUrl = (draft.baseUrl || "").trim();
+  if (!baseUrl) {
+    throw new Error("请先填写 Base URL");
+  }
+
+  // 1. 若为类似 TokenDance 的聚合网关，尝试探测主目录 GET /gateway/v1/models
+  if (baseUrl.includes("tokendance.space")) {
+    try {
+      const gatewayModelsUrl = "https://tokendance.space/gateway/v1/models";
+      const res: any = await fetchSyncPost("/api/network/forwardProxy", {
+        url: gatewayModelsUrl,
+        method: "GET",
+        timeout: 10000,
+        headers: [
+          { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
+          { "User-Agent": "siyuan-api-switch" },
+        ],
+      });
+      if (res && res.code === 0 && res.data?.status === 200 && res.data?.body) {
+        const parsed = typeof res.data.body === "string" ? JSON.parse(res.data.body) : res.data.body;
+        if (Array.isArray(parsed?.data)) {
+          const matchedModels: string[] = [];
+          const contextLengths: Record<string, number> = {};
+          for (const item of parsed.data) {
+            const protocols: string[] = Array.isArray(item.supported_protocols) ? item.supported_protocols : [];
+            const isSystemOne = protocols.some(
+              (p: string) => typeof p === "string" && (p.includes("systemone") || p.includes("system-one") || p.includes("jev"))
+            );
+            if (isSystemOne && typeof item.id === "string" && item.id.trim()) {
+              const id = item.id.trim();
+              matchedModels.push(id);
+              if (typeof item.context_length === "number" && item.context_length > 0) {
+                contextLengths[id] = item.context_length;
+                contextLengths[id.toLowerCase()] = item.context_length;
+              }
+            }
+          }
+          if (matchedModels.length > 0) {
+            return {
+              models: [...new Set(matchedModels)].sort((a, b) => a.localeCompare(b)),
+              contextLengths,
+            };
+          }
+        }
+      }
+    } catch {
+      // 嗅探失败时自动回退为默认决策模型池
+    }
+  }
+
+  // 2. 默认推荐池（包含当前 draft 已有自定义模型）
+  const candidateModels = new Set(DEFAULT_SYSTEMONE_MODELS);
+  if (Array.isArray(draft.models)) {
+    for (const m of draft.models) {
+      const name = (m.name || m.id || "").trim();
+      if (name) candidateModels.add(name);
+    }
+  }
+  return {
+    models: Array.from(candidateModels).sort((a, b) => a.localeCompare(b)),
+    contextLengths: { ...DEFAULT_SYSTEMONE_CONTEXTS },
+  };
+}
+
+/**
+ * 决策模型专用：一级连通性测试（发送轻量 Schema 探针，零 Token 消耗）
+ */
+export async function testSystemOneConnection(draft: ProviderDraft, start: number): Promise<ConnectionTestResult> {
+  const url = resolveSystemOneEndpoint(draft.baseUrl);
+  const candidateModel = draft.models?.[0]?.name || draft.models?.[0]?.id || "bocha-jev-v1";
+  const headers: Array<Record<string, string>> = [
+    { "content-type": "application/json" },
+    { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
+  ];
+  for (const [key, value] of Object.entries(draft.headers || {})) {
+    headers.push({ [key]: value });
+  }
+
+  let res: any;
+  try {
+    res = await fetchSyncPost("/api/network/forwardProxy", {
+      url,
+      method: "POST",
+      timeout: (draft.requestTimeout ?? 30) * 1000,
+      contentType: "application/json",
+      headers,
+      payload: { model: candidateModel },
+    });
+  } catch (err: any) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - start,
+      modelCount: 0,
+      message: `网络或思源内核代理请求失败: ${err?.message || err}`,
+    };
+  }
+
+  const latencyMs = Date.now() - start;
+  if (!res || typeof res !== "object" || res.code !== 0) {
+    return {
+      ok: false,
+      latencyMs,
+      modelCount: 0,
+      message: extractKernelError(res, "思源内核转发请求失败"),
+    };
+  }
+
+  const data = res.data || {};
+  const status = typeof data.status === "number" ? data.status : 0;
+  const body = typeof data.body === "string" ? data.body : "";
+
+  // 1. 200 OK
+  if (status >= 200 && status < 300) {
+    return {
+      ok: true,
+      latencyMs,
+      modelCount: 1,
+      message: `决策模型端点连接成功（${latencyMs}ms）`,
+    };
+  }
+
+  // 2. 422: FastAPI/Pydantic 校验缺少必填字段（state/questions），证明认证与网关路由 100% 成功，0 token 消耗
+  if (status === 422) {
+    return {
+      ok: true,
+      latencyMs,
+      modelCount: 1,
+      message: `决策模型端点连接成功（${latencyMs}ms，零 Token 探针已验证端点连通与 API 密钥有效）`,
+    };
+  }
+
+  // 3. 401 / 403 鉴权失败
+  if (status === 401 || status === 403) {
+    return {
+      ok: false,
+      latencyMs,
+      modelCount: 0,
+      message: `鉴权失败 (HTTP ${status})：请检查 API Key 是否有效`,
+    };
+  }
+
+  // 4. 404 端点未找到
+  if (status === 404) {
+    return {
+      ok: false,
+      latencyMs,
+      modelCount: 0,
+      message: `端点未找到 (HTTP 404)：请检查 Base URL 是否正确`,
+    };
+  }
+
+  // 5. 400 校验
+  if (status === 400) {
+    if (body.includes("模型不存在") || body.includes("invalid_request")) {
+      return {
+        ok: true,
+        latencyMs,
+        modelCount: 0,
+        message: `端点连接成功（${latencyMs}ms，密钥有效），但候选模型「${candidateModel}」未在服务商处找到，可手动添加其他可用模型`,
+      };
+    }
+    return {
+      ok: false,
+      latencyMs,
+      modelCount: 0,
+      message: `请求参数错误 (HTTP 400)：${body.slice(0, 150)}`,
+    };
+  }
+
+  return {
+    ok: false,
+    latencyMs,
+    modelCount: 0,
+    message: `服务响应异常 (HTTP ${status})：${body.slice(0, 150)}`,
+  };
+}
+
+/**
+ * 决策模型专用：二级深度测试（发送极简 noul 结构化决策请求，消耗少量 tokens 验证真实推理）
+ */
+export async function testSystemOneModel(draft: ProviderDraft, modelName: string): Promise<ModelTestResult> {
+  const start = Date.now();
+  const url = resolveSystemOneEndpoint(draft.baseUrl);
+  const headers: Array<Record<string, string>> = [
+    { "content-type": "application/json" },
+    { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
+  ];
+  for (const [key, value] of Object.entries(draft.headers || {})) {
+    headers.push({ [key]: value });
+  }
+
+  let res: any;
+  try {
+    res = await fetchSyncPost("/api/network/forwardProxy", {
+      url,
+      method: "POST",
+      timeout: (draft.requestTimeout ?? 30) * 1000,
+      contentType: "application/json",
+      headers,
+      payload: {
+        model: modelName,
+        state: "ping",
+        questions: {
+          probe: {
+            type: "noul",
+            instructions: "ping connectivity check",
+          },
+        },
+      },
+    });
+  } catch (err: any) {
+    throw new Error(`调用思源内核 forwardProxy 失败: ${err?.message || err}`);
+  }
+
+  const latencyMs = Date.now() - start;
+  if (!res || typeof res !== "object" || res.code !== 0) {
+    throw new Error(extractKernelError(res, "思源内核转发请求失败"));
+  }
+
+  const data = res.data || {};
+  const status = typeof data.status === "number" ? data.status : 0;
+  const body = typeof data.body === "string" ? data.body : "";
+
+  if (status >= 200 && status < 300) {
+    let tokensDesc = "";
+    let probDesc = "";
+    try {
+      const parsed = typeof body === "string" ? JSON.parse(body) : body;
+      const inputTokens = parsed?.usage?.input_tokens;
+      if (typeof inputTokens === "number") {
+        tokensDesc = `，消耗 ${inputTokens} tokens`;
+      }
+      const noul = parsed?.answers?.probe?.noul;
+      if (typeof noul === "number") {
+        probDesc = `，决策真假概率: ${noul.toFixed(3)}`;
+      }
+    } catch {}
+
+    return {
+      ok: true,
+      matched: true,
+      availableCount: 1,
+      message: `决策模型「${modelName}」深度测试通过（耗时 ${latencyMs}ms${tokensDesc}${probDesc}）`,
+    };
+  }
+
+  if (status === 400 && (body.includes("模型不存在") || body.includes("invalid_request"))) {
+    return {
+      ok: false,
+      matched: false,
+      availableCount: 0,
+      message: `模型「${modelName}」在服务商不存在或未开通`,
+    };
+  }
+  if (status === 401 || status === 403) {
+    return {
+      ok: false,
+      matched: false,
+      availableCount: 0,
+      message: `鉴权失败 (HTTP ${status})：请检查 API Key`,
+    };
+  }
+  if (status === 429) {
+    return {
+      ok: false,
+      matched: false,
+      availableCount: 0,
+      message: `请求被限流 (HTTP 429)：请稍后重试`,
+    };
+  }
+
+  return {
+    ok: false,
+    matched: false,
+    availableCount: 0,
+    message: `深度测试失败 (HTTP ${status})：${body.slice(0, 150)}`,
+  };
+}
+
 /**
  * 刷新可用模型：调用内核 listModels 拉取 /v1/models 清单与 context_length 元数据。
  * 部分供应商不支持该端点或拒不返回清单，此时抛出带内核 msg 的错误，由 UI 回退为手动输入。
@@ -87,6 +395,10 @@ function extractKernelError(res: any, fallback: string): string {
 export async function fetchProviderModels(draft: ProviderDraft): Promise<ModelsFetchResult> {
   if (!(draft.baseUrl || "").trim()) {
     throw new Error("请先填写 Base URL");
+  }
+
+  if (isSystemOneProtocol(draft)) {
+    return fetchSystemOneModels(draft);
   }
 
   let res: any;
@@ -126,10 +438,14 @@ export async function fetchProviderModels(draft: ProviderDraft): Promise<ModelsF
 }
 
 /**
- * 一级测试（连通性）：调 listModels，不消耗 tokens，验证地址、密钥与网络可达。
+ * 一级测试（连通性）：调 listModels 或决策探针，不消耗 tokens，验证地址、密钥与网络可达。
  */
 export async function testProviderConnection(draft: ProviderDraft): Promise<ConnectionTestResult> {
   const start = Date.now();
+  if (isSystemOneProtocol(draft)) {
+    return testSystemOneConnection(draft, start);
+  }
+
   try {
     const result = await fetchProviderModels(draft);
     return {
@@ -149,8 +465,7 @@ export async function testProviderConnection(draft: ProviderDraft): Promise<Conn
 }
 
 /**
- * 二级测试（深度测试）：调内核 testModel 对指定模型发 max_tokens=1 的真实对话请求，
- * 消耗少量 tokens，可验证模型名、余额与端到端可用性。
+ * 二级测试（深度测试）：对指定模型发极简请求，消耗少量 tokens，验证模型名、余额与端到端可用性。
  */
 export async function testProviderModel(draft: ProviderDraft, modelName: string): Promise<ModelTestResult> {
   if (!(draft.baseUrl || "").trim()) {
@@ -159,6 +474,10 @@ export async function testProviderModel(draft: ProviderDraft, modelName: string)
   const model = (modelName || "").trim();
   if (!model) {
     throw new Error("请先选择或输入要测试的模型");
+  }
+
+  if (isSystemOneProtocol(draft)) {
+    return testSystemOneModel(draft, model);
   }
 
   let res: any;
@@ -252,21 +571,20 @@ async function sendProbeRequest(
       max_tokens: 1,
       messages: [{ role: "user", content: buildFillerContent(targetTokens) }],
     };
-  } else if (protocol === "systemone") {
+  } else if (protocol === "systemone" || isSystemOneProtocol(draft)) {
     // TypeSafe System One (Jev) 原生决策端点：POST /systemone
-    url = /\/systemone$/i.test(baseUrl) ? baseUrl : `${baseUrl}/systemone`;
+    url = resolveSystemOneEndpoint(baseUrl);
     headers = [
       { "content-type": "application/json" },
       { "Authorization": `Bearer ${(draft.apiKey || "").trim()}` },
     ];
     payload = {
       model: model || "jev-latest",
-      state: { user_query: "ping" },
+      state: buildFillerContent(targetTokens),
       questions: {
         ping: {
-          type: "choice",
+          type: "noul",
           instructions: "connectivity probe",
-          criteria: { ok: "ok", none: "none" },
         },
       },
     };

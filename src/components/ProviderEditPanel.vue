@@ -76,7 +76,7 @@
               type="button"
               :disabled="refreshingModels"
               @click="refreshModels"
-              data-tooltip="调用服务商 /v1/models 接口拉取真实可用模型清单（经思源内核转发，不消耗 tokens）"
+              :data-tooltip="localProvider.protocol === 'systemone' ? '拉取决策模型网关或推荐模型清单（不消耗 tokens）' : '调用服务商 /v1/models 接口拉取真实可用模型清单（经思源内核转发，不消耗 tokens）'"
               data-tooltip-position="left"
             >
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" :class="{ 'fn__rotate': refreshingModels }"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
@@ -246,6 +246,7 @@ const currentDraft = computed<ProviderDraft>(() => {
     protocol: localProvider.value.protocol,
     requestTimeout: localProvider.value.requestTimeout ?? 30,
     headers: parsedHeaders,
+    models: (localProvider.value.models || []).map((m) => ({ id: m.id, name: m.name })),
   };
 });
 

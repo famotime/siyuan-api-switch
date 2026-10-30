@@ -36,6 +36,11 @@ export const MODEL_CONTEXT_LENGTHS: Record<string, number> = {
   "openai/gpt-4o-mini": 128000,
   "openai/o4-mini": 200000,
 
+  // ===== TypeSafe System One (Jev 决策模型) =====
+  "bocha-jev-v1": 32000,
+  "ateve-jev-v1": 32000,
+  "jev-latest": 32000,
+
   // ===== Anthropic =====
   "claude-opus-4-5": 200000,
   "claude-sonnet-4-5": 200000,
