@@ -21,7 +21,14 @@
       <div class="form-row">
         <div class="form-group col-6">
           <label>配置名称 *</label>
-          <input type="text" class="b3-text-field" v-model="localProfile.name" placeholder="如 DeepSeek 默认" />
+          <input 
+            type="text" 
+            class="b3-text-field" 
+            v-model="localProfile.name" 
+            @input="onNameInput"
+            @blur="onNameBlur"
+            placeholder="如 DeepSeek 默认" 
+          />
         </div>
         <div class="form-group col-6">
           <div class="label-with-link">
@@ -178,16 +185,17 @@
       <button class="b3-button b3-button--error" v-if="!isNew" @click.stop="$emit('delete', localProfile.id)" type="button">删除</button>
       <div class="flex-spacer"></div>
       <button class="b3-button b3-button--cancel" @click="$emit('cancel')">取消</button>
-      <button class="b3-button b3-button--primary" @click="$emit('save', localProfile)">保存</button>
+      <button class="b3-button b3-button--primary" @click="handleSave">保存</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import { ApiProfile } from "@/services/api-switch-core";
 import { ApiProvider } from "@/types";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST } from "@/constants/providers";
+import { computeDefaultProfileName } from "@/utils/profile-naming";
 
 const props = defineProps<{
   profile: ApiProfile;
@@ -205,6 +213,8 @@ const localProfile = ref<ApiProfile>({ ...props.profile });
 const showApiKey = ref(false);
 const showAdvanced = ref(false);
 const newModelInput = ref("");
+const isNameManuallyEdited = ref(false);
+const initialSnapshot = ref("");
 
 const presetOptions = PRESET_PROVIDER_LIST.filter((p) => p.category !== "custom");
 
@@ -216,6 +226,19 @@ const presetModels = computed<Record<string, string[]>>(() => {
   return map;
 });
 
+const generateDefaultName = () => {
+  return computeDefaultProfileName(
+    localProfile.value.providerId,
+    localProfile.value.provider,
+    localProfile.value.model,
+    props.providers
+  );
+};
+
+const updateInitialSnapshot = () => {
+  initialSnapshot.value = JSON.stringify(localProfile.value);
+};
+
 watch(
   () => props.profile,
   (newVal) => {
@@ -223,9 +246,63 @@ watch(
       ...newVal,
       models: newVal.models ? [...newVal.models] : [],
     };
+    if (props.isNew) {
+      isNameManuallyEdited.value = false;
+      localProfile.value.name = generateDefaultName();
+    }
+    nextTick(() => {
+      updateInitialSnapshot();
+    });
   },
   { immediate: true, deep: true }
 );
+
+// 联动自动更新名称（当且仅当新建且用户尚未手动自定义输入名称）
+watch(
+  [() => localProfile.value.providerId, () => localProfile.value.provider, () => localProfile.value.model],
+  () => {
+    if (props.isNew && !isNameManuallyEdited.value) {
+      localProfile.value.name = generateDefaultName();
+    }
+  }
+);
+
+const onNameInput = () => {
+  if (localProfile.value.name.trim() === "") {
+    isNameManuallyEdited.value = false;
+  } else {
+    isNameManuallyEdited.value = true;
+  }
+};
+
+const onNameBlur = () => {
+  if (props.isNew && !isNameManuallyEdited.value && !localProfile.value.name.trim()) {
+    localProfile.value.name = generateDefaultName();
+  }
+};
+
+const isDirty = () => {
+  if (!initialSnapshot.value) return false;
+  return JSON.stringify(localProfile.value) !== initialSnapshot.value;
+};
+
+const resetDirty = () => {
+  updateInitialSnapshot();
+};
+
+const handleSave = () => {
+  if (props.isNew && !localProfile.value.name.trim()) {
+    localProfile.value.name = generateDefaultName();
+  }
+  emit("save", localProfile.value);
+};
+
+defineExpose({
+  isDirty,
+  resetDirty,
+  getCurrentData: () => localProfile.value,
+  handleSave,
+});
 
 const currentAvailableModels = computed(() => {
   if (localProfile.value.providerId) {

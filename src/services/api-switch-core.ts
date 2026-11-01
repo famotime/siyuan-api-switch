@@ -562,21 +562,27 @@ export class ApiSwitchCore {
   }
 
   async deleteProfile(profileId: string): Promise<void> {
-    await this.profileStore.deleteProfile(profileId);
-
-    const pluginsToUnbind: string[] = [];
+    // 1. 查找所有绑定了当前 Profile 的插件与槽位
+    const entriesToUnbind: { pluginId: string; slotId?: string }[] = [];
     const bindings = this.bindingManager.getBindings();
-    for (const pluginId in bindings) {
-      if (bindings[pluginId] === profileId) {
-        pluginsToUnbind.push(pluginId);
+    for (const key in bindings) {
+      if (bindings[key] === profileId) {
+        if (key.includes(":")) {
+          const [pluginId, slotId] = key.split(":");
+          entriesToUnbind.push({ pluginId, slotId });
+        } else {
+          entriesToUnbind.push({ pluginId: key });
+        }
       }
     }
 
-    for (const pluginId of pluginsToUnbind) {
-      this.bindingManager.removeBinding(pluginId);
-      this.bindingManager.notifyPluginUpdate(pluginId, null);
+    // 2. 依次调用标准的 bindPlugin 清理绑定并通知插件回调（接收 null 恢复独立配置）
+    for (const entry of entriesToUnbind) {
+      await this.bindPlugin(entry.pluginId, "", entry.slotId);
     }
 
+    // 3. 从 Profile 仓储中移除并持久化
+    await this.profileStore.deleteProfile(profileId);
     await this.save();
   }
 

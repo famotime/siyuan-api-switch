@@ -1,6 +1,6 @@
 <template>
   <div class="plugin-app-main" v-if="showDialog">
-    <div class="dialog-overlay" @click.self="closeDialog">
+    <div class="dialog-overlay" @click.self="handleCloseDialog">
       <div 
         class="switch-dialog"
         :class="{ 'is-dragging': isDraggingWindow, 'is-resizing': isResizingWindow }"
@@ -43,7 +43,7 @@
                 <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
                 <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
               </button>
-              <button class="close-btn" @click="closeDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
+              <button class="close-btn" @click="handleCloseDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
@@ -211,6 +211,7 @@
           <div class="dialog-content">
             <!-- 场景一：编辑 API 提供商 (Provider) -->
             <ProviderEditPanel
+              ref="providerPanelRef"
               v-if="activeView === 'provider' && editingProvider"
               :provider="editingProvider"
               :is-new="isNewProvider"
@@ -221,6 +222,7 @@
 
             <!-- 场景二：编辑 Profile -->
             <ProfileEditPanel
+              ref="profilePanelRef"
               v-else-if="activeView === 'profile' && editingProfile"
               :profile="editingProfile"
               :is-new="isNewProfile"
@@ -279,13 +281,13 @@
     </div>
 
     <!-- 自定义确认弹窗 -->
-    <div class="confirm-overlay" v-if="confirmDialog.show" @click.self="closeConfirm(false)">
+    <div class="confirm-overlay" v-if="confirmDialog.show" @click.self="handleConfirmOverlayClick">
       <div class="confirm-dialog animate-fade-in">
         <div class="confirm-title">{{ confirmDialog.title }}</div>
         <div class="confirm-text" style="white-space: pre-line;">{{ confirmDialog.text }}</div>
         <div class="confirm-actions">
-          <button class="b3-button b3-button--cancel" @click="closeConfirm(false)">取消</button>
-          <button class="b3-button b3-button--primary" @click="closeConfirm(true)">确定</button>
+          <button class="b3-button b3-button--cancel" @click="handleConfirmCancel">{{ confirmDialog.cancelText }}</button>
+          <button class="b3-button b3-button--primary" @click="handleConfirmOk">{{ confirmDialog.confirmText }}</button>
         </div>
       </div>
     </div>
@@ -352,13 +354,13 @@ const activePluginId = ref<string | null>(null)
 
 const editingProvider = ref<ApiProvider | null>(null)
 const isNewProvider = ref(false)
-const originalProviderState = ref("")
 
 const editingProfile = ref<ApiProfile | null>(null)
 const isNewProfile = ref(false)
-const originalProfileState = ref("")
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const providerPanelRef = ref<InstanceType<typeof ProviderEditPanel> | null>(null)
+const profilePanelRef = ref<InstanceType<typeof ProfileEditPanel> | null>(null)
 
 const activePlugin = computed(() => {
   if (activeView.value !== 'plugin' || !activePluginId.value) return null
@@ -366,58 +368,140 @@ const activePlugin = computed(() => {
 })
 
 // 确认弹窗状态
-const confirmDialog = ref({
+interface ConfirmDialogOptions {
+  title: string
+  text: string
+  confirmText?: string
+  cancelText?: string
+  onConfirm: () => void | Promise<void>
+  onCancel?: () => void
+}
+
+const confirmDialog = ref<{
+  show: boolean
+  title: string
+  text: string
+  confirmText: string
+  cancelText: string
+  onConfirm: () => void | Promise<void>
+  onCancel?: () => void
+}>({
   show: false,
   title: "",
   text: "",
+  confirmText: "确定",
+  cancelText: "取消",
   onConfirm: () => {},
+  onCancel: undefined,
 })
-const showCustomConfirm = (title: string, text: string, onConfirm: () => void) => {
-  confirmDialog.value = {
-    show: true,
-    title,
-    text,
-    onConfirm,
-  }
-}
-const closeConfirm = (confirmed: boolean) => {
-  confirmDialog.value.show = false
-  if (confirmed && confirmDialog.value.onConfirm) {
-    confirmDialog.value.onConfirm()
+
+const showCustomConfirm = (
+  titleOrOptions: string | ConfirmDialogOptions,
+  text?: string,
+  onConfirm?: () => void | Promise<void>
+) => {
+  if (typeof titleOrOptions === 'object') {
+    confirmDialog.value = {
+      show: true,
+      title: titleOrOptions.title,
+      text: titleOrOptions.text,
+      confirmText: titleOrOptions.confirmText || '确定',
+      cancelText: titleOrOptions.cancelText || '取消',
+      onConfirm: titleOrOptions.onConfirm,
+      onCancel: titleOrOptions.onCancel,
+    }
+  } else {
+    confirmDialog.value = {
+      show: true,
+      title: titleOrOptions,
+      text: text || '',
+      confirmText: '确定',
+      cancelText: '取消',
+      onConfirm: onConfirm || (() => {}),
+      onCancel: undefined,
+    }
   }
 }
 
+const handleConfirmOk = async () => {
+  const onConfirm = confirmDialog.value.onConfirm
+  confirmDialog.value.show = false
+  if (onConfirm) {
+    await onConfirm()
+  }
+}
+
+const handleConfirmCancel = () => {
+  const onCancel = confirmDialog.value.onCancel
+  confirmDialog.value.show = false
+  if (onCancel) {
+    onCancel()
+  }
+}
+
+const handleConfirmOverlayClick = () => {
+  confirmDialog.value.show = false
+}
+
 // 脏检查辅助
-const recordProviderSnapshot = (p: ApiProvider) => {
-  originalProviderState.value = JSON.stringify(p)
+const isCurrentViewDirty = (): { dirty: boolean; type: 'provider' | 'profile' } => {
+  if (activeView.value === 'provider' && providerPanelRef.value?.isDirty()) {
+    return { dirty: true, type: 'provider' }
+  }
+  if (activeView.value === 'profile' && profilePanelRef.value?.isDirty()) {
+    return { dirty: true, type: 'profile' }
+  }
+  return { dirty: false, type: 'provider' }
 }
-const isProviderDirty = () => {
-  if (!editingProvider.value || !originalProviderState.value) return false
-  return JSON.stringify(editingProvider.value) !== originalProviderState.value
-}
-const recordProfileSnapshot = (p: ApiProfile) => {
-  originalProfileState.value = JSON.stringify(p)
-}
-const isProfileDirty = () => {
-  if (!editingProfile.value || !originalProfileState.value) return false
-  return JSON.stringify(editingProfile.value) !== originalProfileState.value
-}
-const handleSafeNavigate = (navigateAction: () => void) => {
-  if (activeView.value === 'provider' && isProviderDirty()) {
-    showCustomConfirm("未保存改动", "当前 API 提供商有未保存的改动，确定要放弃改动并离开吗？", () => {
-      originalProviderState.value = ""
-      navigateAction()
-    })
+
+const handleSafeNavigate = (navigateAction: () => void | Promise<void>) => {
+  const { dirty, type } = isCurrentViewDirty()
+  if (!dirty) {
+    navigateAction()
     return
   }
-  if (activeView.value === 'profile' && isProfileDirty()) {
-    showCustomConfirm("未保存改动", "当前 API 配置有未保存的改动，确定要放弃改动并离开吗？", () => {
-      originalProfileState.value = ""
-      navigateAction()
-    })
-    return
-  }
-  navigateAction()
+
+  const typeName = type === 'provider' ? 'API 提供商' : 'API 配置'
+  showCustomConfirm({
+    title: "未保存修改",
+    text: `当前 ${typeName} 有未保存的改动，是否在离开前保存？`,
+    confirmText: "保存",
+    cancelText: "放弃",
+    onConfirm: async () => {
+      let saved = false
+      if (type === 'provider') {
+        const data = providerPanelRef.value?.getCurrentData()
+        if (data) {
+          saved = await saveProvider(data, true)
+        }
+      } else {
+        const data = profilePanelRef.value?.getCurrentData()
+        if (data) {
+          saved = await saveProfile(data, true)
+        }
+      }
+
+      if (saved) {
+        confirmDialog.value.show = false
+        await navigateAction()
+      }
+    },
+    onCancel: async () => {
+      if (type === 'provider') {
+        providerPanelRef.value?.resetDirty()
+      } else {
+        profilePanelRef.value?.resetDirty()
+      }
+      confirmDialog.value.show = false
+      await navigateAction()
+    },
+  })
+}
+
+const handleCloseDialog = () => {
+  handleSafeNavigate(() => {
+    closeDialog()
+  })
 }
 
 // 刷新全部数据
@@ -439,7 +523,6 @@ const selectProvider = (id: string) => {
     const prov = providers.value.find((p) => p.id === id)
     if (prov) {
       editingProvider.value = JSON.parse(JSON.stringify(prov))
-      recordProviderSnapshot(editingProvider.value!)
     }
   })
 }
@@ -499,7 +582,6 @@ const createProviderFromPreset = (presetId: string) => {
         models,
       }
     }
-    recordProviderSnapshot(editingProvider.value!)
   })
 }
 
@@ -514,7 +596,6 @@ const selectProfile = (id: string) => {
     const prof = profiles.value.find((p) => p.id === id)
     if (prof) {
       editingProfile.value = JSON.parse(JSON.stringify(prof))
-      recordProfileSnapshot(editingProfile.value!)
     }
   })
 }
@@ -529,7 +610,7 @@ const createNewProfile = () => {
 
     editingProfile.value = {
       id: "",
-      name: "新配置",
+      name: "",
       providerId: undefined,
       provider: "deepseek",
       baseUrl: "https://api.deepseek.com",
@@ -542,7 +623,6 @@ const createNewProfile = () => {
       memo: "",
       providerUrl: "https://platform.deepseek.com/api_keys",
     }
-    recordProfileSnapshot(editingProfile.value!)
   })
 }
 
@@ -558,34 +638,46 @@ const selectPlugin = (id: string) => {
 // 提供商保存与删除
 const isLocalBaseUrl = (url: string) => /\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//i.test(url.trim()) || /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/?$/i.test(url.trim())
 
-const saveProvider = async (providerData: ApiProvider) => {
+const saveProvider = async (providerData: ApiProvider, skipReselect = false): Promise<boolean> => {
   const isLocal = isLocalBaseUrl(providerData.baseUrl || "")
   if (!providerData.displayName.trim() || !providerData.baseUrl.trim()) {
     showMessage("请填写提供商名称与 Base URL", 5000, "error")
-    return
+    return false
   }
   if (!providerData.apiKey.trim() && !isLocal) {
     showMessage("请填写 API Key（本地服务如 Ollama / LM Studio 可留空）", 5000, "error")
-    return
+    return false
   }
 
-  if (isNewProvider.value) {
-    const newProv = await apiSwitchCore.addProvider(providerData)
-    selectedProviderId.value = newProv.id
-    isNewProvider.value = false
-  } else {
-    await apiSwitchCore.updateProvider(providerData)
-  }
+  try {
+    let targetId = providerData.id
+    if (isNewProvider.value) {
+      const newProv = await apiSwitchCore.addProvider(providerData)
+      targetId = newProv.id
+      selectedProviderId.value = targetId
+      isNewProvider.value = false
+    } else {
+      await apiSwitchCore.updateProvider(providerData)
+    }
 
-  refreshData()
-  showMessage("提供商配置已保存", 3000, "info")
-  selectProvider(selectedProviderId.value!)
+    refreshData()
+    showMessage("提供商配置已保存", 3000, "info")
+    providerPanelRef.value?.resetDirty?.()
+
+    if (!skipReselect && targetId) {
+      selectProvider(targetId)
+    }
+    return true
+  } catch (err: any) {
+    showMessage(`保存提供商失败: ${err?.message || err}`, 5000, "error")
+    return false
+  }
 }
 
 const deleteProvider = (id: string) => {
   showCustomConfirm("删除提供商", "确定要删除此 API 提供商吗？关联此提供商的 Profile 将解除关联。", async () => {
     try {
-      originalProviderState.value = ""
+      providerPanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProvider(id)
       activeView.value = 'empty'
       selectedProviderId.value = null
@@ -598,8 +690,10 @@ const deleteProvider = (id: string) => {
 }
 
 const quickDeleteProvider = (prov: ApiProvider) => {
-  selectProvider(prov.id)
-  deleteProvider(prov.id)
+  handleSafeNavigate(() => {
+    selectProvider(prov.id)
+    deleteProvider(prov.id)
+  })
 }
 
 const cancelProviderEdit = () => {
@@ -611,10 +705,10 @@ const cancelProviderEdit = () => {
 }
 
 // Profile 保存与删除
-const saveProfile = async (profileData: ApiProfile) => {
+const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promise<boolean> => {
   if (!profileData.name.trim() || !profileData.model.trim()) {
     showMessage("请填写配置名称与模型名称", 5000, "error")
-    return
+    return false
   }
 
   const provKey = (profileData.provider || "").trim().toLowerCase()
@@ -623,40 +717,52 @@ const saveProfile = async (profileData: ApiProfile) => {
 
   if (!profileData.providerId && (!effectiveBaseUrl || !profileData.apiKey?.trim())) {
     showMessage("独立配置必须填写 API 密钥与基础 URL", 5000, "error")
-    return
+    return false
   }
 
-  let autoRes: AutoProviderResult | null = null
+  try {
+    let autoRes: AutoProviderResult | null = null
+    let targetId = profileData.id
 
-  if (isNewProfile.value) {
-    const newProf = await apiSwitchCore.addProfile(profileData)
-    selectedProfileId.value = newProf.id
-    isNewProfile.value = false
-    autoRes = (newProf as any)._autoProviderResult || null
-  } else {
-    autoRes = await apiSwitchCore.updateProfile(profileData)
-  }
-
-  refreshData()
-
-  if (autoRes) {
-    const provName = autoRes.provider.displayName
-    if (autoRes.action === "created") {
-      showMessage(`API 配置已保存，并已自动生成提供商「${provName}」`, 4000, "info")
+    if (isNewProfile.value) {
+      const newProf = await apiSwitchCore.addProfile(profileData)
+      targetId = newProf.id
+      selectedProfileId.value = targetId
+      isNewProfile.value = false
+      autoRes = (newProf as any)._autoProviderResult || null
     } else {
-      showMessage(`API 配置已保存，并已关联至已有提供商「${provName}」`, 4000, "info")
+      autoRes = await apiSwitchCore.updateProfile(profileData)
     }
-  } else {
-    showMessage("API 配置已保存", 3000, "info")
-  }
 
-  selectProfile(selectedProfileId.value!)
+    refreshData()
+
+    if (autoRes) {
+      const provName = autoRes.provider.displayName
+      if (autoRes.action === "created") {
+        showMessage(`API 配置已保存，并已自动生成提供商「${provName}」`, 4000, "info")
+      } else {
+        showMessage(`API 配置已保存，并已关联至已有提供商「${provName}」`, 4000, "info")
+      }
+    } else {
+      showMessage("API 配置已保存", 3000, "info")
+    }
+
+    profilePanelRef.value?.resetDirty?.()
+
+    if (!skipReselect && targetId) {
+      selectProfile(targetId)
+    }
+    return true
+  } catch (err: any) {
+    showMessage(`保存配置失败: ${err?.message || err}`, 5000, "error")
+    return false
+  }
 }
 
 const deleteProfile = (id: string) => {
   showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
     try {
-      originalProfileState.value = ""
+      profilePanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProfile(id)
       activeView.value = 'empty'
       selectedProfileId.value = null
@@ -669,8 +775,10 @@ const deleteProfile = (id: string) => {
 }
 
 const quickDeleteProfile = (prof: ApiProfile) => {
-  selectProfile(prof.id)
-  deleteProfile(prof.id)
+  handleSafeNavigate(() => {
+    selectProfile(prof.id)
+    deleteProfile(prof.id)
+  })
 }
 
 const cancelEdit = () => {
@@ -683,22 +791,26 @@ const cancelEdit = () => {
 
 // 快捷操作
 const applyProfileToAll = (prof: ApiProfile) => {
-  showCustomConfirm("一键配置", `确定要将 API 配置「${prof.name}」应用到所有接管项目吗？这将会覆盖当前所有子插件和思源内置 AI 的绑定配置。`, async () => {
-    try {
-      await apiSwitchCore.applyProfileToAllPlugins(prof.id)
-      refreshData()
-      showMessage("已将配置应用至所有项目", 3000, "info")
-    } catch (err) {
-      logDebug("Exception in applyProfileToAll", err)
-    }
+  handleSafeNavigate(() => {
+    showCustomConfirm("一键配置", `确定要将 API 配置「${prof.name}」应用到所有接管项目吗？这将会覆盖当前所有子插件和思源内置 AI 的绑定配置。`, async () => {
+      try {
+        await apiSwitchCore.applyProfileToAllPlugins(prof.id)
+        refreshData()
+        showMessage("已将配置应用至所有项目", 3000, "info")
+      } catch (err) {
+        logDebug("Exception in applyProfileToAll", err)
+      }
+    })
   })
 }
 
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
-  showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
-    await apiSwitchCore.bindPlugin(plug.pluginId, "")
-    refreshData()
-    showMessage(`已解除对 ${plug.displayName} 的接管`, 3000, "info")
+  handleSafeNavigate(() => {
+    showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
+      await apiSwitchCore.bindPlugin(plug.pluginId, "")
+      refreshData()
+      showMessage(`已解除对 ${plug.displayName} 的接管`, 3000, "info")
+    })
   })
 }
 
@@ -723,7 +835,9 @@ const importLocalConfig = async (pluginId: string, slotId?: string) => {
 
 // 导入导出与思源同步
 const triggerImport = () => {
-  fileInputRef.value?.click()
+  handleSafeNavigate(() => {
+    fileInputRef.value?.click()
+  })
 }
 
 const handleFileImport = async (e: Event) => {
@@ -747,37 +861,41 @@ const handleFileImport = async (e: Event) => {
 }
 
 const exportProfiles = () => {
-  try {
-    const jsonStr = apiSwitchCore.exportSiyuanAiJson()
-    const blob = new Blob([jsonStr], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `siyuan-ai-${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-    showMessage("配置已成功导出为 ai.json 格式", 3000, "info")
-  } catch (err: any) {
-    showMessage(`导出失败: ${err?.message || err}`, 5000, "error")
-  }
+  handleSafeNavigate(() => {
+    try {
+      const jsonStr = apiSwitchCore.exportSiyuanAiJson()
+      const blob = new Blob([jsonStr], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `siyuan-ai-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      showMessage("配置已成功导出为 ai.json 格式", 3000, "info")
+    } catch (err: any) {
+      showMessage(`导出失败: ${err?.message || err}`, 5000, "error")
+    }
+  })
 }
 
 const syncFromSiyuanAction = async () => {
-  try {
-    const res = await apiSwitchCore.syncFromSiyuan()
-    refreshData()
-    let detailMsg = ""
-    if (res.reusedProfilesCount > 0 && res.createdProfilesCount > 0) {
-      detailMsg = `（复用 ${res.reusedProfilesCount} 个已有配置，新增 ${res.createdProfilesCount} 个配置）`
-    } else if (res.reusedProfilesCount > 0) {
-      detailMsg = `（已复用 ${res.reusedProfilesCount} 个一致的已有配置，未产生重复配置）`
-    } else if (res.createdProfilesCount > 0) {
-      detailMsg = `（新增 ${res.createdProfilesCount} 个配置）`
+  handleSafeNavigate(async () => {
+    try {
+      const res = await apiSwitchCore.syncFromSiyuan()
+      refreshData()
+      let detailMsg = ""
+      if (res.reusedProfilesCount > 0 && res.createdProfilesCount > 0) {
+        detailMsg = `（复用 ${res.reusedProfilesCount} 个已有配置，新增 ${res.createdProfilesCount} 个配置）`
+      } else if (res.reusedProfilesCount > 0) {
+        detailMsg = `（已复用 ${res.reusedProfilesCount} 个一致的已有配置，未产生重复配置）`
+      } else if (res.createdProfilesCount > 0) {
+        detailMsg = `（新增 ${res.createdProfilesCount} 个配置）`
+      }
+      showMessage(`已成功从思源同步！检测到 ${res.providersCount} 个提供商，已联动 ${res.profilesCount} 个场景配置${detailMsg}。`, 4000, "info")
+    } catch (err: any) {
+      showMessage(`读取同步失败: ${err?.message || err}`, 5000, "error")
     }
-    showMessage(`已成功从思源同步！检测到 ${res.providersCount} 个提供商，已联动 ${res.profilesCount} 个场景配置${detailMsg}。`, 4000, "info")
-  } catch (err: any) {
-    showMessage(`读取同步失败: ${err?.message || err}`, 5000, "error")
-  }
+  })
 }
 
 // 思源笔记快捷导入检测

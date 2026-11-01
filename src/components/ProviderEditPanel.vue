@@ -165,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { showMessage } from "siyuan";
 import { ApiProvider, ApiProviderModel, AiProtocol } from "@/types";
 import { getPresetProtocolBaseUrl } from "@/constants/providers";
@@ -212,6 +212,37 @@ const setActionMessage = (text: string, ok: boolean | null) => {
   actionOk.value = ok;
 };
 
+const initialSnapshot = ref("");
+
+const getNormalizedCurrentData = (): ApiProvider => {
+  let parsedHeaders: Record<string, string> = {};
+  if (headersText.value.trim()) {
+    try {
+      parsedHeaders = JSON.parse(headersText.value);
+    } catch {
+      parsedHeaders = localProvider.value.headers || {};
+    }
+  }
+  return {
+    ...localProvider.value,
+    headers: parsedHeaders,
+    models: localProvider.value.models ? [...localProvider.value.models] : [],
+  };
+};
+
+const updateInitialSnapshot = () => {
+  initialSnapshot.value = JSON.stringify(getNormalizedCurrentData());
+};
+
+const isDirty = () => {
+  if (!initialSnapshot.value) return false;
+  return JSON.stringify(getNormalizedCurrentData()) !== initialSnapshot.value;
+};
+
+const resetDirty = () => {
+  updateInitialSnapshot();
+};
+
 watch(
   () => props.provider,
   (newVal) => {
@@ -225,6 +256,9 @@ watch(
       : "";
     selectedModelName.value = "";
     setActionMessage("", null);
+    nextTick(() => {
+      updateInitialSnapshot();
+    });
   },
   { immediate: true, deep: true }
 );
@@ -427,17 +461,25 @@ const startProbe = async () => {
   }
 };
 
-const handleSave = () => {
+const handleSave = (): boolean => {
   let parsedHeaders: Record<string, string> = {};
   if (headersText.value.trim()) {
     try {
       parsedHeaders = JSON.parse(headersText.value);
     } catch (e) {
       alert("Headers JSON 格式不正确，请检查！");
-      return;
+      return false;
     }
   }
   localProvider.value.headers = parsedHeaders;
   emit("save", localProvider.value);
+  return true;
 };
+
+defineExpose({
+  isDirty,
+  resetDirty,
+  getCurrentData: getNormalizedCurrentData,
+  handleSave,
+});
 </script>

@@ -242,4 +242,78 @@ describe("子插件注册、接管绑定与实时通知分发", () => {
     const decisionSlot = reg?.slots?.find((s: any) => s.slotId === "decision");
     expect(decisionSlot?.localConfig?.model).toBe("gpt-4o");
   });
+
+  it("当删除 API 配置时，正确取消关联该配置的所有单槽位与多槽位插件接管，并派发 null 通知", async () => {
+    const profToDelete: ApiProfile = {
+      id: "prof_to_delete",
+      name: "To Delete",
+      provider: "deepseek",
+      baseUrl: "https://api.deepseek.com",
+      apiKey: "sk-del",
+      model: "deepseek-chat",
+    };
+    const profKeep: ApiProfile = {
+      id: "prof_keep",
+      name: "Keep Profile",
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk-keep",
+      model: "gpt-4o",
+    };
+    (apiSwitchCore as any).profiles = [profToDelete, profKeep];
+
+    // 1. 注册一个单槽位插件，并绑定到 prof_to_delete
+    const singleCallback = vi.fn();
+    (apiSwitchCore as any).registerPlugin("plugin_single", "单槽位插件", singleCallback);
+    await apiSwitchCore.bindPlugin("plugin_single", "prof_to_delete");
+    expect(singleCallback).toHaveBeenLastCalledWith(expect.objectContaining({ profileId: "prof_to_delete" }));
+
+    // 2. 注册一个多槽位插件：chat 绑定 prof_to_delete，decision 绑定 prof_keep
+    const multiCallback = vi.fn();
+    (apiSwitchCore as any).registerPlugin(
+      "plugin_multi",
+      "多槽位插件",
+      multiCallback,
+      undefined,
+      [
+        { id: "chat", name: "对话" },
+        { id: "decision", name: "决策" },
+      ]
+    );
+    await apiSwitchCore.bindPlugin("plugin_multi", "prof_to_delete", "chat");
+    await apiSwitchCore.bindPlugin("plugin_multi", "prof_keep", "decision");
+    expect(multiCallback).toHaveBeenLastCalledWith(expect.objectContaining({ profileId: "prof_keep" }), "decision");
+
+    // 3. 模拟思源原生编辑器也绑定到 prof_to_delete
+    await apiSwitchCore.bindPlugin("siyuan_builtin_editing", "prof_to_delete");
+
+    // 检查删除前的绑定状态
+    expect(apiSwitchCore.getBindings()["plugin_single"]).toBe("prof_to_delete");
+    expect(apiSwitchCore.getBindings()["plugin_multi:chat"]).toBe("prof_to_delete");
+    expect(apiSwitchCore.getBindings()["plugin_multi:decision"]).toBe("prof_keep");
+    expect(apiSwitchCore.getBindings()["siyuan_builtin_editing"]).toBe("prof_to_delete");
+
+    // 4. 执行删除 prof_to_delete
+    await apiSwitchCore.deleteProfile("prof_to_delete");
+
+    // 5. 验证单槽位插件已解绑且收到 null
+    expect(singleCallback).toHaveBeenLastCalledWith(null);
+    expect(apiSwitchCore.getBindings()["plugin_single"]).toBeUndefined();
+    expect(apiSwitchCore.getBoundSharedConfig("plugin_single")).toBeNull();
+
+    // 6. 验证多槽位插件中的 chat 槽位已解绑且收到 null 回调
+    expect(multiCallback).toHaveBeenCalledWith(null, "chat");
+    expect(apiSwitchCore.getBindings()["plugin_multi:chat"]).toBeUndefined();
+    expect(apiSwitchCore.getBoundSharedConfig("plugin_multi", "chat")).toBeNull();
+
+    // 7. 验证绑定了其他配置的 decision 槽位不受影响
+    expect(apiSwitchCore.getBindings()["plugin_multi:decision"]).toBe("prof_keep");
+    expect(apiSwitchCore.getBoundSharedConfig("plugin_multi", "decision")?.profileId).toBe("prof_keep");
+
+    // 8. 验证思源内置编辑器绑定也已清理
+    expect(apiSwitchCore.getBindings()["siyuan_builtin_editing"]).toBeUndefined();
+
+    // 9. 验证 profileStore 中已不再存在该配置
+    expect(apiSwitchCore.getProfiles().find((p) => p.id === "prof_to_delete")).toBeUndefined();
+  });
 });
