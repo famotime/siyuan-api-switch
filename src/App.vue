@@ -1,6 +1,6 @@
 <template>
   <div class="plugin-app-main" v-if="showDialog">
-    <div class="dialog-overlay" @click.self="handleCloseDialog">
+    <div class="dialog-overlay">
       <div 
         class="switch-dialog"
         :class="{ 'is-dragging': isDraggingWindow, 'is-resizing': isResizingWindow }"
@@ -302,7 +302,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, PRESET_PROVIDER_LIST, AutoProviderResult } from "@/services/api-switch-core"
 import { ApiProvider, ApiProviderModel } from "@/types"
 import { lookupModelContextLength } from "@/constants/model-contexts"
@@ -503,6 +503,41 @@ const handleCloseDialog = () => {
     closeDialog()
   })
 }
+
+// 全局 Esc 快捷键关闭处理（支持层级关闭与未保存保护）
+const handleGlobalKeydown = (e: KeyboardEvent) => {
+  if (e.key === "Escape" && !e.repeat) {
+    if (confirmDialog.value.show) {
+      handleConfirmCancel()
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    if (showPresetPicker.value) {
+      showPresetPicker.value = false
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    if (showDialog.value) {
+      handleCloseDialog()
+      e.preventDefault()
+      e.stopPropagation()
+    }
+  }
+}
+
+watch(showDialog, (val) => {
+  if (val) {
+    window.addEventListener("keydown", handleGlobalKeydown, true)
+  } else {
+    window.removeEventListener("keydown", handleGlobalKeydown, true)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleGlobalKeydown, true)
+})
 
 // 刷新全部数据
 const refreshData = () => {

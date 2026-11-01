@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { extractSiyuanAiSettings } from "@/services/api-switch-core";
+import { extractSiyuanAiSettings, cleanRawProviderDisplayName, resolveProviderDisplayName } from "@/services/api-switch-core";
 
-describe("extractSiyuanAiSettings", () => {
+describe("extractSiyuanAiSettings 与提供商名称净化", () => {
   it("空配置或非法对象输入时安全返回空结构", () => {
     expect(extractSiyuanAiSettings(null)).toEqual({
       providers: [],
@@ -169,6 +169,109 @@ describe("extractSiyuanAiSettings", () => {
       requestTimeoutSeconds: 20,
       temperature: 0.7,
       maxTokens: 1000,
+    });
+  });
+
+  describe("提供商名称净化与独立显示（不含模型名）", () => {
+    it("cleanRawProviderDisplayName 正确剥离末尾拼接的模型名称后缀", () => {
+      // 命中当前模型名
+      expect(cleanRawProviderDisplayName("讯飞星火-spark-x2.6", "spark-x2.6")).toBe("讯飞星火");
+      expect(cleanRawProviderDisplayName("DeepSeek-v4-flash", "v4-flash")).toBe("DeepSeek");
+
+      // 从模型列表中匹配并剥离
+      expect(cleanRawProviderDisplayName("DeepSeek-v4-flash", undefined, ["deepseek-chat", "v4-flash"])).toBe("DeepSeek");
+
+      // 干净的提供商名保持不变
+      expect(cleanRawProviderDisplayName("StepFun", "step-1-8k")).toBe("StepFun");
+      expect(cleanRawProviderDisplayName("OpenAI 官方", "gpt-4o")).toBe("OpenAI 官方");
+      expect(cleanRawProviderDisplayName("自定义大模型", undefined, [])).toBe("自定义大模型");
+    });
+
+    it("resolveProviderDisplayName 优先使用关联提供商对象的纯粹 displayName", () => {
+      const providers = [
+        {
+          id: "prov-spark",
+          displayName: "讯飞星火",
+          baseUrl: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+          apiKey: "k",
+          protocol: "openai" as const,
+          requestTimeout: 30,
+          headers: {},
+          models: [{ id: "spark-x2.6", name: "spark-x2.6", displayName: "spark-x2.6", enabled: true }],
+        },
+      ];
+
+      // Profile 命名带有 -spark-x2.6，但关联了 prov-spark
+      const profile = {
+        id: "prof-1",
+        name: "讯飞星火-spark-x2.6",
+        providerId: "prov-spark",
+        provider: "openai",
+        baseUrl: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+        apiKey: "k",
+        model: "spark-x2.6",
+      };
+
+      const resolved = resolveProviderDisplayName(profile, providers);
+      expect(resolved).toBe("讯飞星火");
+    });
+
+    it("resolveProviderDisplayName 在无 providerId 时根据 baseUrl 或 name 剥离模型后缀", () => {
+      // 命中 DeepSeek 预置 baseUrl
+      const deepseekProfile = {
+        id: "prof-ds",
+        name: "DeepSeek-v4-flash",
+        provider: "openai",
+        baseUrl: "https://api.deepseek.com",
+        apiKey: "k",
+        model: "v4-flash",
+      };
+      expect(resolveProviderDisplayName(deepseekProfile)).toBe("DeepSeek 官方");
+
+      // 未命中已知预置时，正确从 profile.name 中剥离模型名
+      const customProfile = {
+        id: "prof-custom",
+        name: "公司私有网关-llama-3-8b",
+        provider: "custom",
+        baseUrl: "https://llm.mycompany.internal/v1",
+        apiKey: "k",
+        model: "llama-3-8b",
+      };
+      expect(resolveProviderDisplayName(customProfile)).toBe("公司私有网关");
+    });
+
+    it("extractSiyuanAiSettings 解析思源配置时自动清洗污染的提供商 displayName", () => {
+      const raw = {
+        providers: [
+          {
+            id: "p-spark",
+            displayName: "讯飞星火-spark-x2.6",
+            baseURL: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+            apiKey: "key",
+            models: [{ id: "spark-x2.6", name: "spark-x2.6" }],
+          },
+          {
+            id: "p-ds",
+            displayName: "DeepSeek-v4-flash",
+            baseURL: "https://api.deepseek.com",
+            apiKey: "key",
+            models: [{ id: "v4-flash", name: "v4-flash" }],
+          },
+          {
+            id: "p-step",
+            displayName: "StepFun",
+            baseURL: "https://api.stepfun.com/step_plan/v1",
+            apiKey: "key",
+            models: [{ id: "step-1-8k", name: "step-1-8k" }],
+          },
+        ],
+      };
+
+      const res = extractSiyuanAiSettings(raw);
+      expect(res.providers).toHaveLength(3);
+      expect(res.providers[0].displayName).toBe("讯飞星火");
+      expect(res.providers[1].displayName).toBe("DeepSeek");
+      expect(res.providers[2].displayName).toBe("StepFun");
     });
   });
 });

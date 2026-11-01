@@ -2,6 +2,7 @@ import { fetchSyncPost } from "siyuan";
 import { ApiProvider, ApiProviderModel, SiyuanAiJson } from "@/types";
 import { ApiProfile } from "./profile-store";
 import { normalizeAiProtocol } from "@/utils/protocol";
+import { findPresetByBaseUrl, PRESET_PROVIDERS } from "@/constants/providers";
 
 export interface SiyuanExtractedAiInfo {
   providerId?: string;
@@ -25,6 +26,85 @@ export interface SiyuanExtractedAiInfo {
 }
 
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
+
+/**
+ * 辅助函数：从可能被污染的提供商名称中剔除末尾附带的「-模型名称」后缀
+ * 思源笔记 API 提供商列表应仅展示提供商本身名称（如「讯飞星火」、「DeepSeek」），不得混入具体模型名。
+ */
+export function cleanRawProviderDisplayName(
+  name: string,
+  currentModel?: string,
+  modelList?: string[]
+): string {
+  if (!name) return "";
+  let result = name.trim();
+
+  // 若以当前模型名称结尾，如 "讯飞星火-spark-x2.6" 或 "DeepSeek-v4-flash"
+  const m = (currentModel || "").trim();
+  if (m && result.length > m.length + 1 && result.endsWith(`-${m}`)) {
+    result = result.slice(0, -(m.length + 1)).trim();
+  }
+
+  // 若以候选模型列表中任意模型名结尾
+  if (Array.isArray(modelList)) {
+    for (const item of modelList) {
+      const itemStr = (item || "").trim();
+      if (itemStr && result.length > itemStr.length + 1 && result.endsWith(`-${itemStr}`)) {
+        result = result.slice(0, -(itemStr.length + 1)).trim();
+        break;
+      }
+    }
+  }
+
+  return result || name;
+}
+
+/**
+ * 解析并净化写入思源笔记的 API 提供商展示名称 (displayName)
+ * 规则：严格仅显示提供商本身名称（如「讯飞星火」、「DeepSeek 官方」），绝不附带模型名后缀
+ */
+export function resolveProviderDisplayName(
+  effective: ApiProfile,
+  providers: ApiProvider[] = []
+): string {
+  // 1. 若关联了已有提供商对象，优先使用提供商本身的 displayName
+  if (effective.providerId) {
+    const matched = providers.find((p) => p.id === effective.providerId);
+    if (matched?.displayName && matched.displayName.trim()) {
+      return cleanRawProviderDisplayName(
+        matched.displayName.trim(),
+        effective.model,
+        matched.models?.map((m) => m.name || m.id)
+      );
+    }
+  }
+
+  // 2. 根据 BaseUrl 匹配预置提供商（如 https://api.deepseek.com -> "DeepSeek 官方"）
+  const presetByUrl = findPresetByBaseUrl(effective.baseUrl);
+  if (presetByUrl?.displayName) {
+    return presetByUrl.displayName;
+  }
+
+  // 3. 根据 profile.provider 协议/标识匹配预置
+  const provKey = (effective.provider || "").trim().toLowerCase();
+  if (provKey && provKey !== "custom" && PRESET_PROVIDERS[provKey]?.displayName) {
+    return PRESET_PROVIDERS[provKey].displayName;
+  }
+
+  // 4. 从 profile.name 中剥离末尾拼接的模型名称（针对自动生成的「供应商-模型」命名）
+  let cleanName = (effective.name || "").trim();
+  cleanName = cleanRawProviderDisplayName(cleanName, effective.model, effective.models);
+
+  if (cleanName && cleanName !== "新 API 配置") {
+    return cleanName;
+  }
+
+  // 5. 最终兜底
+  if (provKey && provKey !== "custom") {
+    return provKey.charAt(0).toUpperCase() + provKey.slice(1);
+  }
+  return "自定义提供商";
+}
 
 export function extractSiyuanAiSettings(aiConfig: any): {
   providers: ApiProvider[];
@@ -53,9 +133,16 @@ export function extractSiyuanAiSettings(aiConfig: any): {
         }))
       : [];
 
+    const rawDisplayName = p.displayName || p.id || `提供商 ${idx + 1}`;
+    const cleanedDisplayName = cleanRawProviderDisplayName(
+      rawDisplayName,
+      undefined,
+      pModels.map((m) => m.name || m.id)
+    );
+
     return {
       id: p.id || `provider_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-      displayName: p.displayName || p.id || `提供商 ${idx + 1}`,
+      displayName: cleanedDisplayName,
       enabled: p.enabled ?? true,
       apiKey: extractApiKey(p),
       baseUrl: extractBaseUrl(p),
@@ -246,7 +333,8 @@ export class SiyuanAdapter {
 
   async updateSiyuanSystemAi(
     effective: ApiProfile | null,
-    targetScope: "editing" | "agent" | "decision" | "all" = "all"
+    targetScope: "editing" | "agent" | "decision" | "all" = "all",
+    providers: ApiProvider[] = []
   ): Promise<void> {
     if (!effective) return;
 
@@ -277,20 +365,28 @@ export class SiyuanAdapter {
         if (targetScope === "editing" || targetScope === "agent" || targetScope === "all") {
           const modelId = effective.model || "custom-model";
           const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
+          const providerDisplayName = resolveProviderDisplayName(effective, providers);
 
           let targetProvider = aiConfig.providers.find(
-            (p: any) => p.id === providerId || p.displayName === effective.name
+            (p: any) =>
+              (p.id && p.id === providerId) ||
+              (providerDisplayName && p.displayName === providerDisplayName) ||
+              (effective.name && p.displayName === effective.name) ||
+              (providerDisplayName && p.displayName && p.displayName.startsWith(`${providerDisplayName}-`))
           );
 
           if (!targetProvider) {
             targetProvider = {
               id: providerId,
-              displayName: effective.name || "API Switch Provider",
+              displayName: providerDisplayName,
               enabled: true,
               protocol: normalizeAiProtocol(effective.protocol || effective.provider),
               models: [],
             };
             aiConfig.providers.push(targetProvider);
+          } else {
+            // 确保更新/修正提供商名称，防止历史脏数据（如带有 -model 后缀）残留
+            targetProvider.displayName = providerDisplayName;
           }
 
           targetProvider.enabled = true;
@@ -420,7 +516,8 @@ export class SiyuanAdapter {
     tasks: {
       scope: "editing" | "agent" | "decision";
       effective: ApiProfile;
-    }[]
+    }[],
+    providers: ApiProvider[] = []
   ): Promise<boolean> {
     if (!tasks || tasks.length === 0) return true;
 
@@ -453,20 +550,28 @@ export class SiyuanAdapter {
         } else if (scope === "editing" || scope === "agent") {
           const modelId = effective.model || "custom-model";
           const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
+          const providerDisplayName = resolveProviderDisplayName(effective, providers);
 
           let targetProvider = aiConfig.providers.find(
-            (p: any) => p.id === providerId || p.displayName === effective.name
+            (p: any) =>
+              (p.id && p.id === providerId) ||
+              (providerDisplayName && p.displayName === providerDisplayName) ||
+              (effective.name && p.displayName === effective.name) ||
+              (providerDisplayName && p.displayName && p.displayName.startsWith(`${providerDisplayName}-`))
           );
 
           if (!targetProvider) {
             targetProvider = {
               id: providerId,
-              displayName: effective.name || "API Switch Provider",
+              displayName: providerDisplayName,
               enabled: true,
               protocol: normalizeAiProtocol(effective.protocol || effective.provider),
               models: [],
             };
             aiConfig.providers.push(targetProvider);
+          } else {
+            // 确保更新/修正提供商名称，防止历史脏数据（如带有 -model 后缀）残留
+            targetProvider.displayName = providerDisplayName;
           }
 
           targetProvider.enabled = true;
@@ -597,7 +702,11 @@ export class SiyuanAdapter {
     const exportData: SiyuanAiJson & { _siyuanApiSwitch?: any } = {
       providers: providers.map((p) => ({
         id: p.id,
-        displayName: p.displayName,
+        displayName: cleanRawProviderDisplayName(
+          p.displayName,
+          undefined,
+          (p.models || []).map((m) => m.name || m.id)
+        ),
         enabled: p.enabled ?? true,
         baseURL: p.baseUrl,
         apiKey: p.apiKey,

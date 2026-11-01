@@ -3,7 +3,7 @@ import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, Regis
 import { ProviderStore } from "./provider-store";
 import { ProfileStore, ApiProfile } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
-import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo } from "./siyuan-adapter";
+import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo, cleanRawProviderDisplayName, resolveProviderDisplayName } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 import { normalizeAiProtocol } from "@/utils/protocol";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/constants/providers";
@@ -12,7 +12,7 @@ import { migrateLegacyAiProtocols } from "./config-migration";
 export type { ApiProfile } from "./profile-store";
 export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo, PluginBindingState } from "./plugin-binding-manager";
 export type { RegisterPluginOptions } from "@/types";
-export { extractSiyuanAiSettings };
+export { extractSiyuanAiSettings, cleanRawProviderDisplayName, resolveProviderDisplayName };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
 export { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
@@ -173,7 +173,20 @@ export class ApiSwitchCore {
     try {
       const data = await this.plugin.loadData(STORAGE_KEY);
       if (data) {
-        this.providerStore.setProviders(data.providers || []);
+        let providersChanged = false;
+        const loadedProviders: ApiProvider[] = (data.providers || []).map((p: ApiProvider) => {
+          const cleaned = cleanRawProviderDisplayName(
+            p.displayName,
+            undefined,
+            (p.models || []).map((m) => m.name || m.id)
+          );
+          if (cleaned !== p.displayName) {
+            providersChanged = true;
+            return { ...p, displayName: cleaned };
+          }
+          return p;
+        });
+        this.providerStore.setProviders(loadedProviders);
         this.profileStore.setProfiles(data.profiles || []);
         this.bindingManager.setBindings(data.bindings || {});
         // 旧版协议值域（gemini/anthropic/custom）静默迁移为思源内核原生值域
@@ -181,7 +194,7 @@ export class ApiSwitchCore {
           this.providerStore.getProviders(),
           this.profileStore.getProfiles()
         );
-        if (migrated) {
+        if (migrated || providersChanged) {
           await this.save();
         }
       } else {
@@ -591,7 +604,7 @@ export class ApiSwitchCore {
   public async updateSiyuanSystemAi(profile: ApiProfile | null, targetScope: "editing" | "agent" | "decision" | "all" = "all") {
     if (!profile) return;
     const effective = this.resolveEffectiveProfile(profile);
-    await this.siyuanAdapter.updateSiyuanSystemAi(effective, targetScope);
+    await this.siyuanAdapter.updateSiyuanSystemAi(effective, targetScope, this.providerStore.getProviders());
   }
 
   // 从思源笔记全量同步/读取配置到旋钮（提供商、编辑器、智能体、决策模型，自动校验避免重复配置）
@@ -630,7 +643,11 @@ export class ApiSwitchCore {
             ...existing,
             ...prov,
             id: existing.id,
-            displayName: existing.displayName || prov.displayName,
+            displayName: cleanRawProviderDisplayName(
+              existing.displayName || prov.displayName,
+              undefined,
+              mergedModels.map((m) => m.name || m.id)
+            ),
             models: mergedModels,
           };
         } else {
@@ -824,7 +841,7 @@ export class ApiSwitchCore {
         throw new Error(`未找到「${info.name}」绑定的配置 (ID: ${boundId})`);
       }
       const effective = this.resolveEffectiveProfile(prof);
-      await this.siyuanAdapter.updateSiyuanSystemAi(effective, scope);
+      await this.siyuanAdapter.updateSiyuanSystemAi(effective, scope, this.providerStore.getProviders());
       return {
         success: true,
         appliedScopes: [scope],
@@ -860,7 +877,7 @@ export class ApiSwitchCore {
       };
     }
 
-    const ok = await this.siyuanAdapter.updateSiyuanSystemAiBatch(tasks);
+    const ok = await this.siyuanAdapter.updateSiyuanSystemAiBatch(tasks, this.providerStore.getProviders());
     if (!ok) {
       throw new Error("写回思源笔记配置失败，请检查思源内核状态");
     }

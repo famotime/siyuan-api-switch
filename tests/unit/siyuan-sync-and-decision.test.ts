@@ -380,5 +380,59 @@ describe("Jev 决策模型与思源内置 AI 配置读取/导入测试", () => {
       expect(savedAiConfig.openAI.apiModel).toBe("original-openai-model");
       expect(savedAiConfig.openAI.apiKey).toBe("orig-open-key");
     });
+
+    it("写回思源时提供商 displayName 仅显示纯粹提供商名称，自动修正存量 -model 后缀", async () => {
+      let savedAiConfig: any = null;
+      (apiSwitchCore as any).siyuanAdapter.fetchSystemAiConfig = async () => ({
+        providers: [
+          {
+            id: "prov_spark",
+            displayName: "讯飞星火-spark-x2.6", // 存量受污染的旧名称
+            baseURL: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+            apiKey: "key-spark",
+            models: [{ id: "spark-x2.6", name: "spark-x2.6" }],
+          },
+        ],
+        editing: { modelId: "spark-x2.6" },
+      });
+      (apiSwitchCore as any).siyuanAdapter.setSystemAiConfig = async (conf: any) => {
+        savedAiConfig = conf;
+        return true;
+      };
+
+      // 添加一个显式命名为「讯飞星火」的提供商
+      const prov = await apiSwitchCore.addProvider({
+        id: "prov_spark",
+        displayName: "讯飞星火",
+        baseUrl: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+        apiKey: "key-spark",
+        protocol: "openai",
+        requestTimeout: 30,
+        headers: {},
+        models: [{ id: "spark-x2.6", name: "spark-x2.6", displayName: "spark-x2.6", enabled: true }],
+      });
+
+      // 创建并绑定一个 Profile，名称为自动生成的 "讯飞星火-spark-x2.6"
+      const profile = await apiSwitchCore.addProfile({
+        name: "讯飞星火-spark-x2.6",
+        providerId: prov.id,
+        provider: "openai",
+        baseUrl: "https://maas-api.cn-huabei-1.xf-yun.com/v1",
+        apiKey: "key-spark",
+        model: "spark-x2.6",
+      });
+
+      (apiSwitchCore as any).bindingManager.setBinding("siyuan_builtin_editing", profile.id);
+
+      const res = await apiSwitchCore.applyToSiyuan("editing");
+      expect(res.success).toBe(true);
+
+      // 验证写入思源的提供商名称被成功修正为纯粹的提供商名「讯飞星火」
+      expect(savedAiConfig).toBeDefined();
+      const sparkProv = savedAiConfig.providers.find((p: any) => p.id === "prov_spark");
+      expect(sparkProv).toBeDefined();
+      expect(sparkProv.displayName).toBe("讯飞星火");
+      expect(sparkProv.displayName).not.toContain("spark-x2.6");
+    });
   });
 });
