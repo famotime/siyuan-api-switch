@@ -110,3 +110,77 @@ describe("computeDefaultProfileName", () => {
     expect(fallback).toBe("自定义-model-y");
   });
 });
+
+describe("API 配置文件保存时自动命名", () => {
+  const mockProviders: ApiProvider[] = [
+    {
+      id: "prov_siliconflow",
+      displayName: "SiliconFlow",
+      enabled: true,
+      protocol: "openai",
+      baseUrl: "https://api.siliconflow.cn/v1",
+      apiKey: "sk-sf-test",
+      models: [{ id: "deepseek-ai/DeepSeek-V3", name: "deepseek-ai/DeepSeek-V3", displayName: "DeepSeek V3" }],
+    },
+  ];
+
+  it("编辑已有配置清空名称后保存，updateProfile 应自动按照 提供商-启用模型 命名", async () => {
+    const { apiSwitchCore } = await import("@/services/api-switch-core");
+    (apiSwitchCore as any).providerStore.setProviders(mockProviders);
+    (apiSwitchCore as any).profileStore.setProfiles([]);
+
+    // 初始创建一个带有自定义名称的 Profile
+    const profile = await apiSwitchCore.addProfile({
+      name: "原配置名称",
+      providerId: "prov_siliconflow",
+      model: "deepseek-ai/DeepSeek-V3",
+      apiKey: "",
+      baseUrl: "",
+    });
+    expect(profile.name).toBe("原配置名称");
+
+    // 用户在编辑时删除原配置名称后直接保存（传入空字符串）
+    profile.name = "";
+    await apiSwitchCore.updateProfile(profile);
+
+    const updated = apiSwitchCore.getProfiles().find((p) => p.id === profile.id);
+    expect(updated?.name).toBe("SiliconFlow-deepseek-ai/DeepSeek-V3");
+  });
+
+  it("编辑已有预置独立配置清空名称后保存（纯空格），updateProfile 应自动按照 预置提供商-启用模型 命名", async () => {
+    const { apiSwitchCore } = await import("@/services/api-switch-core");
+    (apiSwitchCore as any).providerStore.setProviders([]);
+    (apiSwitchCore as any).profileStore.setProfiles([]);
+
+    const profile = await apiSwitchCore.addProfile({
+      name: "旧别名",
+      provider: "deepseek",
+      model: "deepseek-chat",
+      apiKey: "sk-test",
+      baseUrl: "https://api.deepseek.com",
+    });
+
+    // 用户删除原配置名称后直接保存（全空格）
+    profile.name = "   ";
+    await apiSwitchCore.updateProfile(profile);
+
+    const updated = apiSwitchCore.getProfiles().find((p) => p.id === profile.id);
+    expect(updated?.name).toBe("DeepSeek 官方-deepseek-chat");
+  });
+
+  it("新建配置时若未填写名称，addProfile 自动按照 提供商-启用模型 命名", async () => {
+    const { apiSwitchCore } = await import("@/services/api-switch-core");
+    (apiSwitchCore as any).providerStore.setProviders([]);
+    (apiSwitchCore as any).profileStore.setProfiles([]);
+
+    const profile = await apiSwitchCore.addProfile({
+      name: "",
+      provider: "openai",
+      model: "gpt-4o",
+      apiKey: "sk-test",
+      baseUrl: "https://api.openai.com/v1",
+    });
+
+    expect(profile.name).toBe("OpenAI 官方-gpt-4o");
+  });
+});

@@ -27,7 +27,7 @@
             v-model="localProfile.name" 
             @input="onNameInput"
             @blur="onNameBlur"
-            placeholder="如 DeepSeek 默认" 
+            placeholder="留空保存自动按「提供商-启用模型」命名" 
           />
         </div>
         <div class="form-group col-6">
@@ -249,6 +249,8 @@ watch(
     if (props.isNew) {
       isNameManuallyEdited.value = false;
       localProfile.value.name = generateDefaultName();
+    } else {
+      isNameManuallyEdited.value = true;
     }
     nextTick(() => {
       updateInitialSnapshot();
@@ -291,7 +293,7 @@ const resetDirty = () => {
 };
 
 const handleSave = () => {
-  if (props.isNew && !localProfile.value.name.trim()) {
+  if (!localProfile.value.name.trim()) {
     localProfile.value.name = generateDefaultName();
   }
   emit("save", localProfile.value);
@@ -300,7 +302,12 @@ const handleSave = () => {
 defineExpose({
   isDirty,
   resetDirty,
-  getCurrentData: () => localProfile.value,
+  getCurrentData: () => {
+    if (!localProfile.value.name.trim()) {
+      localProfile.value.name = generateDefaultName();
+    }
+    return localProfile.value;
+  },
   handleSave,
 });
 

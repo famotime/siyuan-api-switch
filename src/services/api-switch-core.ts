@@ -7,6 +7,7 @@ import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo, cleanRaw
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 import { normalizeAiProtocol } from "@/utils/protocol";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/constants/providers";
+import { computeDefaultProfileName } from "@/utils/profile-naming";
 import { migrateLegacyAiProtocols } from "./config-migration";
 
 export type { ApiProfile } from "./profile-store";
@@ -536,6 +537,15 @@ export class ApiSwitchCore {
   }
 
   async addProfile(profile: Omit<ApiProfile, "id">): Promise<ApiProfile> {
+    if (!profile.name || !profile.name.trim()) {
+      profile.name = computeDefaultProfileName(
+        profile.providerId,
+        profile.provider,
+        profile.model,
+        this.providerStore.getProviders()
+      );
+    }
+
     if (!profile.providerId) {
       const provKey = (profile.provider || "").trim().toLowerCase();
       const preset = PRESET_PROVIDERS[provKey];
@@ -560,6 +570,15 @@ export class ApiSwitchCore {
   }
 
   async updateProfile(profile: ApiProfile): Promise<AutoProviderResult | null> {
+    if (!profile.name || !profile.name.trim()) {
+      profile.name = computeDefaultProfileName(
+        profile.providerId,
+        profile.provider,
+        profile.model,
+        this.providerStore.getProviders()
+      );
+    }
+
     if (!profile.providerId) {
       const provKey = (profile.provider || "").trim().toLowerCase();
       const preset = PRESET_PROVIDERS[provKey];

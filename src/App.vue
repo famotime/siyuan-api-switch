@@ -306,6 +306,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, PRESET_PROVIDER_LIST, AutoProviderResult } from "@/services/api-switch-core"
 import { ApiProvider, ApiProviderModel } from "@/types"
 import { lookupModelContextLength } from "@/constants/model-contexts"
+import { computeDefaultProfileName } from "@/utils/profile-naming"
 import { showMessage } from "siyuan"
 import { useWindowDrag } from "@/composables/useWindowDrag"
 import ProviderEditPanel from "@/components/ProviderEditPanel.vue"
@@ -741,6 +742,15 @@ const cancelProviderEdit = () => {
 
 // Profile 保存与删除
 const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promise<boolean> => {
+  if (!profileData.name || !profileData.name.trim()) {
+    profileData.name = computeDefaultProfileName(
+      profileData.providerId,
+      profileData.provider,
+      profileData.model,
+      providers.value
+    );
+  }
+
   if (!profileData.name.trim() || !profileData.model.trim()) {
     showMessage("请填写配置名称与模型名称", 5000, "error")
     return false
