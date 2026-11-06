@@ -28,7 +28,7 @@ export interface SharedConfig {
   model: string;
   /** 候选模型列表（可选） */
   models?: string[];
-  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages"（v0.10.0 起从旧值 gemini/anthropic/custom 迁移） */
+  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages"（v0.10.0 起从旧值 gemini/anthropic/custom 迁移），及 Jev 决策模型扩展协议 "systemone" */
   protocol?: string;
   /** 当前模型上下文窗口容量 tokens（可选，v0.10.0 新增：来自 /v1/models 元数据、内置目录或主动探测） */
   contextWindow?: number;
@@ -40,6 +40,13 @@ export interface SharedConfig {
   maxTokens?: number;
   /** 自定义 HTTP Headers 字典（可选，如中转网关特定鉴权头） */
   headers?: Record<string, string>;
+  /** 思源编辑器与智能体高级参数全量合集（可选，为空不下发） */
+  maxHistoryMessages?: number;  // 编辑器：最大上下文数
+  maxToolCallRounds?: number;   // 智能体：最大工具调用轮数
+  sessionTimeout?: number;      // 智能体：会话超时时间
+  streamIdleTimeout?: number;   // 智能体：流空闲超时时间
+  confirmTimeout?: number;      // 智能体：确认超时时间
+  maxRetries?: number;          // 智能体：最大重试次数
   /** 是否为分类决策模型（可选） */
   isDecisionModel?: boolean;
   /** Profile 备注说明（可选） */
@@ -98,6 +105,20 @@ export interface SiyuanApiSwitch {
    * 获取指定插件或槽位当前绑定的配置（未接管时返回 null）
    */
   getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
+
+  /**
+   * 子插件主动请求解除托管（省略 slotId 时解除整插件接管）
+   */
+  unbind(pluginId: string, slotId?: string): Promise<void>;
+
+  /**
+   * 子插件上报最新的本地配置，用于 API 旋钮面板实时检测与一键导入匹配
+   */
+  updateLocalConfig(
+    pluginId: string,
+    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
+    slotId?: string
+  ): void;
 }
 ```
 
@@ -118,6 +139,12 @@ export interface SiyuanApiSwitch {
    - 当用户在 API 旋钮中解除对该插件或特定槽位的接管（`callback(null, slotId)`）时，插件应无缝还原为本地原始配置，重新启用输入框并移除接管横幅。
 5. **AI 请求调用优先级与 Headers 合并**：
    - 插件在发起实际 AI 请求时，必须优先读取被接管的配置（`managedConfig || localConfig`），并**务必合并**下发的 `config.headers`，确保自定义网关与中转鉴权正常通信。
+6. **多槽位独立绑定与部分接管**：
+   - 多槽位插件的每个槽位都是**独立绑定单元**：旋钮侧可能仅接管部分槽位（partial 状态），未接管的槽位将持续收到 `callback(null, slotId)`，必须回退到该槽位自身的本地配置，绝不能受其他槽位或插件顶层历史配置影响。
+   - 槽位横幅、输入框置灰与横幅文本也应按槽位独立呈现，避免把「对话模型已接管」误显示为「决策模型已接管」。
+7. **主动解绑与本地配置上报**：
+   - 当用户在插件自身设置中关闭「使用统一 AI 配置」类开关时，应主动调用 `await window.siyuanApiSwitch.unbind(pluginId, slotId?)` 请求解除托管，旋钮面板状态将实时同步。
+   - 插件本地 AI 配置发生变化（如用户手动修改了本地 Base URL / Key / 模型）时，建议调用 `window.siyuanApiSwitch.updateLocalConfig(...)` 上报最新快照，供旋钮面板实时检测配置变化与一键导入匹配。
 
 ---
 
@@ -313,6 +340,8 @@ export default class ComplexPlugin extends Plugin {
 
   private refreshSlotSettingsUi(slotId: string, shared: SharedConfig | null) {
     // 针对特定槽位刷新置灰与横幅
+    // 注意：多槽位插件各槽位独立绑定，shared 为 null 的槽位必须回退该槽位自身的本地配置，
+    // 即使其他槽位仍处于接管状态（部分接管 partial 属正常状态，不是异常）。
   }
 }
 ```

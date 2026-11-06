@@ -24,11 +24,13 @@
 - 🌟 **顶栏快捷入口**：思源笔记顶部工具栏新增专属旋钮图标，随时随地一键唤出或关闭统一配置中心，告别多层设置菜单寻址。
 - **底层 API 提供商 (Providers)**：
   - 统一维护模型底座供应商账号（从预置目录一键添加，或自定义网关）。
-  - 集中配置 Base URL、API Key、通信协议（思源内核原生值域 `openai` / `openai-responses` / `anthropic-messages`）、超时时间、**自定义 HTTP Headers** 及支持的模型清单。
+  - 集中配置 Base URL、API Key、通信协议（思源内核原生值域 `openai` / `openai-responses` / `anthropic-messages`，及 Jev 决策模型扩展协议 `systemone`）、超时时间、**自定义 HTTP Headers** 及支持的模型清单。
 - **上层场景配置 (Profiles)**：
   - **继承机制**：Profile 可直接下拉关联已配置的提供商，自动继承其通信参数与密钥，并直接从模型池中点选模型；
   - **独立定制**：亦可脱离提供商，单独设置定制化的 Base URL、Key、温度与 Token 限制；
-  - **决策模型通用标识**：支持将 Profile 标记为决策判别模型，专用于意图分类与轻量决策场景。
+  - **决策模型通用标识**：支持将 Profile 标记为决策判别模型，专用于意图分类与轻量决策场景；
+  - **智能默认命名**：新建配置默认按「供应商-模型」自动生成名称，手动输入后锁定防覆盖；保存时名称为空（或编辑中原名称被删空）自动回退默认命名，不阻断保存；
+  - **未保存改动保护**：提供商或配置存在未保存改动时，切换面板或关闭弹窗会弹出【保存】与【放弃】确认提示，防止误丢配置。
 - ⚡ **合法预设配置自动生成与关联 Provider**：
   - 新建或编辑 Profile 时，若选择了主流预设服务商（DeepSeek、Gemini、SiliconFlow、OpenAI 等）或输入有效 Base URL，系统将**自动识别并智能生成/匹配底层的 API 提供商**，并补全官方端点与推荐模型池，无需反复跨面板手动创建 Provider。
   - 创建 Profile 未填 Base URL 时，系统会自动补齐官方预设地址并提供轻量反馈。
@@ -43,11 +45,13 @@
   - 🔄 **「从思源读取」**：一键从思源内核拉取最新的原生提供商与场景配置；内置内核级 AES 密文解密（`siyuan-crypto`）与多变命名 API Key 提取，原生 Jev 决策模型与第三方模型端点精准解析。
   - ⚡ **静默自动联动写回**：在接管面板中为思源原生场景切换绑定或调整参数后，系统自动静默精准写回思源内核，无需手动点击写回按钮与确认弹窗。
   - 🛡️ **安全隔离与合并**：增量写回仅同步已接管的场景项，安全合并底层 Provider，绝不污染或覆盖思源原生未接管的配置与原生 `openAI` 设置。
+  - 🧹 **提供商名称净化**：读取与写回思源配置时自动清洗提供商名称中误混入的模型后缀，保持内核侧名称为纯粹提供商名。
   - 🧩 **编辑器与智能体解耦**：思源-编辑器与思源-智能体解耦为独立 Profile，各自参数与模型独立调优、互不影响。
 
 ### 3. 多模型槽位协议（Multi-Slot Protocol）与生态接管
 - **多模型槽位协议**：突破单一插件只能绑定一个模型的局限，全面支持子插件注册多模型槽位（如「主对话模型」与「决策分类模型」独立接管）。
 - **槽位级独立展示与接管**：接管面板按插件卡片内的槽位清晰陈列，各槽位支持独立绑定不同 Profile、独立本地配置解析与独立通知广播。
+- **接管状态三态模型**：插件按槽位绑定情况实时呈现 `full 全部接管` / `partial 部分接管` / `none 独立配置` 三态——左侧导航徽章与右侧状态卡片联动（部分接管展示琥珀橙 Badge 与「已接管 (X/Y)」槽位计数），接管列表免点击直接显示当前生效模型，悬浮查看完整配置。
 - **一键分发接管 5 大插件生态**：自动发现并接管全局注册的兼容插件（Muse 写作助手、文档助手、脉络镜、无界画布、时间统计）。
 - **零输入一键导入**：检测到插件本地原有配置时，提供一键提取导入为旋钮 Profile 并立即完成绑定。
 - **统一请求增强**：下发配置全面携带自定义 `headers` 与 `protocol`，确保所有插件在面对复杂中转网关时稳定通信。
@@ -67,10 +71,11 @@
 ### 6. 优雅的降级保护
 - 全局解耦设计：若未安装或停用 API 旋钮插件，所有子插件将完全无感地继续使用其自身独立的本地配置，绝不影响日常使用。
 
-### 7. 供应商预置目录与在线探测（刷新可用模型 / 测试链接 / 容量探测）
+### 7. 供应商预置目录与在线探测（刷新可用模型 / 测试链接 / 容量探测 / 决策模型独立探测）
 - 📇 **预置供应商目录**：与思源笔记原生「设置 → AI → 供应商」完全一致的 17 家服务商预置（OpenAI、Anthropic、DeepSeek、Moonshot/Kimi、MiniMax 国际/国内、阿里百炼国际/国内、火山方舟、智谱 GLM、Gemini、Mistral、SiliconFlow、OpenRouter、Groq、Ollama、LM Studio）+ 自定义模板。点侧栏「+」即可从目录一键创建，预置自带协议感知 BaseURL（如 DeepSeek 的 Anthropic Messages 入口）与推荐模型池，填 Key 即用。
 - 🔄 **刷新可用模型**：调用思源内核 `/api/ai/listModels` 拉取服务商 `/v1/models` 真实清单，合并去重回填（不删除手动添加的模型）；请求全部由内核 Go 进程转发，无任何 CORS 问题（需思源 v3.7.0+）。
 - 🔌 **两级测试链接**：一级「测试链接」验证地址/密钥/网络连通（不消耗 tokens）；二级「深度测试」对选中模型发一条 `max_tokens=1` 的真实对话请求（消耗少量 tokens），验证模型名、余额与端到端可用性。
+- 🧠 **决策模型 (System One / Jev) 独立探测**：针对 `systemone` 协议（及地址包含 `/systemone` 的决策端点）建立独立探测与刷新通道，彻底解耦内核硬编码的 `/v1/models` 与 `/v1/chat/completions`——一级连通性测试经内核代理发送轻量 Schema 探针，利用服务端 422 校验机制在 0 Token 消耗下验证 Base URL、API Key 与模型合法性；二级深度测试发送极简结构化决策请求，实时回显时延、Token 消耗与决策概率；「刷新可用模型」自动嗅探多协议聚合网关的决策模型清单，非网关服务商安全回退为推荐模型池。
 - 📏 **模型上下文容量探测**：三级来源——服务商 `/v1/models` 元数据 > 内置快照目录（约 100 条主流模型，数据整理自公开 OpenRouter / models.dev 目录）> 主动探测（4k 起指数上探 + 二分逼进，最多 8 次请求、粒度 1k、单次超时 60s，探测前弹窗确认预计消耗）。容量以徽标常显于模型标签（如 `128k`），持久化到提供商配置，接管写回时同步至思源内核（内核 Agent 按其做输入预算裁剪），并经 `SharedConfig.contextWindow` 下发给子插件。
 - 🔁 **协议值域自动迁移**：存量配置中的旧协议值（`gemini` / `anthropic` / `custom`）读档时静默迁移为思源内核原生值域，并自动改写 Gemini 旧原生端点为其 OpenAI 兼容端点，修复旧版 anthropic 协议实际失效的隐患。
 
@@ -115,7 +120,7 @@ export interface SharedConfig {
   model: string;
   /** 候选模型列表（可选） */
   models?: string[];
-  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages" */
+  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages"，及 Jev 决策模型扩展协议 "systemone" */
   protocol?: string;
   /** 当前模型上下文窗口容量 tokens（可选，来自 /v1/models 元数据或内置目录/主动探测） */
   contextWindow?: number;
@@ -127,6 +132,13 @@ export interface SharedConfig {
   maxTokens?: number;
   /** 自定义 HTTP Headers 字典（可选，如中转网关特定鉴权头） */
   headers?: Record<string, string>;
+  /** 思源编辑器与智能体高级参数全量合集（可选，为空不下发） */
+  maxHistoryMessages?: number;  // 编辑器：最大上下文数
+  maxToolCallRounds?: number;   // 智能体：最大工具调用轮数
+  sessionTimeout?: number;      // 智能体：会话超时时间
+  streamIdleTimeout?: number;   // 智能体：流空闲超时时间
+  confirmTimeout?: number;      // 智能体：确认超时时间
+  maxRetries?: number;          // 智能体：最大重试次数
   /** 是否为分类决策模型（可选） */
   isDecisionModel?: boolean;
   /** Profile 备注说明（可选） */
@@ -178,6 +190,14 @@ export interface SiyuanApiSwitch {
   unregister(pluginId: string): void;
   /** 获取指定插件或槽位当前绑定的配置 */
   getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
+  /** 子插件主动请求解除托管某个槽位或整插件接管 */
+  unbind(pluginId: string, slotId?: string): Promise<void>;
+  /** 子插件上报最新的本地配置，用于 API 旋钮面板实时检测与匹配 */
+  updateLocalConfig(
+    pluginId: string,
+    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
+    slotId?: string
+  ): void;
 }
 ```
 
@@ -324,7 +344,7 @@ const response = await fetch(`${activeConfig.baseUrl.replace(/\/+$/, "")}/chat/c
 });
 ```
 
-### 4. 卸载时注销
+### 4. 卸载时注销与主动解绑
 
 在子插件的 `onunload` 中注销以清理监听：
 
@@ -334,6 +354,21 @@ onunload() {
     window.siyuanApiSwitch.unregister(this.name);
   }
 }
+```
+
+此外还可在运行期主动请求解除接管（如用户在插件内关闭「使用统一 AI 配置」开关时）：
+
+```typescript
+// 解除整插件托管，或指定槽位：await window.siyuanApiSwitch.unbind(this.name, "decision");
+await window.siyuanApiSwitch.unbind(this.name);
+
+// 插件本地配置变化时上报最新快照，供旋钮面板实时检测与一键导入匹配
+window.siyuanApiSwitch.updateLocalConfig(this.name, {
+  provider: "custom",
+  baseUrl: this.config.baseUrl,
+  apiKey: this.config.apiKey,
+  model: this.config.model,
+});
 ```
 
 ---
@@ -350,7 +385,7 @@ onunload() {
 本项目采用 Vue 3 + TypeScript 构建，分层服务架构并配备完整的 Vitest 自动化单元测试套件：
 
 ```bash
-# 启动单元测试套件 (7 大测试模块，51 个用例秒级全绿验证)
+# 启动单元测试套件 (11 大测试模块，113 个用例秒级全绿验证)
 npm test
 
 # 执行 TypeScript 静态类型检查
@@ -365,15 +400,16 @@ npm run dev
 
 ### 自动化测试覆盖范围
 
-- 🔌 **多模型槽位接管与通知广播** ([`binding-manager.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/binding-manager.test.ts))：槽位隔离注册、复合键持久化、槽位独立绑定与实时通知分发
-- 🛡️ **智能去重与防重复生成** ([`deduplicate-config.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/deduplicate-config.test.ts))：URL 与协议归一化、Profile / Provider 多维评分比对算法与配置自动复用
+- 🔌 **多模型槽位接管与通知广播** ([`binding-manager.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/binding-manager.test.ts))：槽位隔离注册、复合键持久化、槽位独立绑定与实时通知分发、full/partial/none 三态流转、多槽位解绑时顶层历史键隔离清理与删除配置解绑补全
+- 🛡️ **智能去重与防重复生成** ([`deduplicate-config.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/deduplicate-config.test.ts))：URL 与协议归一化、Profile / Provider 多维评分比对算法（含决策模型与 API Key 严格一致性）、空密钥 Profile 防盲目复用与配置自动复用
 - ⚡ **合法预设配置自动生成 Provider** ([`auto-generate-provider.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/auto-generate-provider.test.ts))：预设服务商智能创建、官方默认端点补齐、推荐模型池扩充与冗余字段清理
-- 🔐 **思源内核 AES 密文解密与增量写回** ([`siyuan-sync-and-decision.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/siyuan-sync-and-decision.test.ts))：原生 Key 密文解密、编辑器与智能体独立解耦同步、已接管项精准增量写回与未接管项安全保护
+- 🔐 **思源内核 AES 密文解密与增量写回** ([`siyuan-sync-and-decision.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/siyuan-sync-and-decision.test.ts))：原生 Key 密文解密、编辑器与智能体独立解耦同步、已接管项精准增量写回、未接管项安全保护与提供商名称净化纠偏
 - 📐 **参数继承与有效 Profile 计算** ([`effective-profile.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/effective-profile.test.ts))：提供商参数级联继承、独立覆盖与优先级决策
-- 📦 **思源原生 `ai.json` 导入导出** ([`import-export.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/import-export.test.ts)、[`extract-siyuan-ai.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/extract-siyuan-ai.test.ts))：4 大原生根节点规范对齐、扩展元数据无损嵌入与旧版兼容转换
-- 🔄 **供应商探测：刷新模型/两级测试/容量探测** ([`provider-probe.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/provider-probe.test.ts))：内核端点草稿请求形态、上下文超限判定、指数上探+二分算法预算控制、硬错误立即中止、容量三级查询优先级
-- 📇 **预置目录与协议值域迁移** ([`protocol-and-presets.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/protocol-and-presets.test.ts))：镜像原生 18 项目录完整性、协议感知地址切换、旧协议值与 Gemini 旧端点静默迁移、决策模型 custom 标记保留
+- 📦 **思源原生 `ai.json` 导入导出** ([`import-export.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/import-export.test.ts)、[`extract-siyuan-ai.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/extract-siyuan-ai.test.ts))：4 大原生根节点规范对齐、扩展元数据无损嵌入、旧版兼容转换与存量提供商名称模型后缀剥离
+- 🔄 **供应商探测：刷新模型/两级测试/容量探测** ([`provider-probe.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/provider-probe.test.ts))：内核端点草稿请求形态、上下文超限判定、指数上探+二分算法预算控制、硬错误立即中止、容量三级查询优先级，以及 System One (Jev) 决策模型 0-Token Schema 探针、深度决策测试与聚合网关模型嗅探刷新
+- 📇 **预置目录与协议值域迁移** ([`protocol-and-presets.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/protocol-and-presets.test.ts))：镜像原生 18 项目录完整性、协议感知地址切换、旧协议值与 Gemini 旧端点静默迁移、决策模型 custom 标记保留与 `systemone` 协议规范化
 - 📏 **上下文容量全链路** ([`context-length.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/context-length.test.ts))：Profile/Provider 容量继承与覆盖、`SharedConfig.contextWindow` 下发、写回思源时同步 `contextLength` 与原生协议值
+- 🏷️ **配置默认命名与生命周期** ([`profile-naming.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/profile-naming.test.ts))：「供应商-模型」默认命名联动、手动命名锁定防覆盖、空名称保存兜底自动回退与存量读档命名纠偏
 
 详细模块职责与分层设计请参阅 [docs/project-structure.md](docs/project-structure.md)。
 
