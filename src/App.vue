@@ -186,7 +186,7 @@
                           {{ plug.bindingState === 'partial' ? '部分接管' : (plug.isBound ? '已接管' : '独立配置') }}
                         </span>
                       </div>
-                      <div class="plugin-sub text-truncate">{{ plug.pluginId }}</div>
+                      <div class="plugin-sub text-truncate" :title="getPluginSubTooltip(plug)">{{ getPluginSubLine(plug) }}</div>
                     </div>
                     <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
@@ -995,6 +995,46 @@ const getProfileDisplaySub = (prof: ApiProfile) => {
     provName = "决策模型"
   }
   return `${provName || "未知"} | ${prof.model || "未设模型"}`
+}
+
+// 接管列表条目副标题：直接展示当前实际生效的模型名（接管→Profile 模型；独立→本地模型），无需点击
+const getEffectiveModel = (
+  item: Pick<RegisteredPluginInfo, "isBound" | "boundProfileId" | "localConfig">
+): string => {
+  if (item.isBound && item.boundProfileId) {
+    const prof = profiles.value.find((p) => p.id === item.boundProfileId)
+    return prof?.model || "未设模型"
+  }
+  return item.localConfig?.model || "未设模型"
+}
+
+const getPluginSubLine = (plug: RegisteredPluginInfo): string => {
+  // 多槽位插件：汇总一行，各槽显示实际生效模型
+  if (plug.slots && plug.slots.length > 0) {
+    return plug.slots.map((s) => getEffectiveModel(s)).join(" + ")
+  }
+  return getEffectiveModel(plug)
+}
+
+// 副标题悬浮提示：pluginId + 「Profile 名 · 模型」完整信息（多槽位逐槽展示）
+const getPluginSubTooltip = (plug: RegisteredPluginInfo): string => {
+  const lines: string[] = [plug.pluginId]
+  if (plug.slots && plug.slots.length > 0) {
+    for (const s of plug.slots) {
+      if (s.isBound && s.boundProfileId) {
+        const prof = profiles.value.find((p) => p.id === s.boundProfileId)
+        lines.push(`${s.name}: 「${prof?.name || "未知配置"}」 · ${getEffectiveModel(s)}`)
+      } else {
+        lines.push(`${s.name}: 独立配置 · ${getEffectiveModel(s)}`)
+      }
+    }
+  } else if (plug.isBound && plug.boundProfileId) {
+    const prof = profiles.value.find((p) => p.id === plug.boundProfileId)
+    lines.push(`「${prof?.name || "未知配置"}」 · ${getEffectiveModel(plug)}`)
+  } else {
+    lines.push(`独立配置 · ${getEffectiveModel(plug)}`)
+  }
+  return lines.join("\n")
 }
 
 onMounted(() => {
