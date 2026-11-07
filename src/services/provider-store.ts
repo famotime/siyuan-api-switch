@@ -27,6 +27,7 @@ export class ProviderStore {
       id: "provider_" + Math.random().toString(36).substring(2, 11),
       models: provider.models || [],
       headers: provider.headers || {},
+      providerUrl: provider.providerUrl ? String(provider.providerUrl).trim() : "",
     };
     this.providers.push(newProvider);
     await this.onSave();
@@ -36,7 +37,10 @@ export class ProviderStore {
   async updateProvider(provider: ApiProvider): Promise<void> {
     const idx = this.providers.findIndex((p) => p.id === provider.id);
     if (idx !== -1) {
-      this.providers[idx] = { ...provider };
+      this.providers[idx] = {
+        ...provider,
+        providerUrl: provider.providerUrl ? String(provider.providerUrl).trim() : "",
+      };
       await this.onSave();
     }
   }

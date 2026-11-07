@@ -126,6 +126,7 @@ export class ProfileStore {
       requestTimeoutSeconds: profile.requestTimeoutSeconds ?? provider.requestTimeout ?? 30,
       models: providerModels.length > 0 ? providerModels : (profile.models || (profile.model ? [profile.model] : [])),
       contextWindow: profile.contextWindow ?? providerModelEntry?.contextLength,
+      providerUrl: profile.providerUrl || provider.providerUrl || "",
     };
   }
 

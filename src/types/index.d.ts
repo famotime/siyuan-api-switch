@@ -52,6 +52,7 @@ export interface ApiProvider {
   requestTimeout?: number;
   headers?: Record<string, string>;
   models: ApiProviderModel[];
+  providerUrl?: string; // 供应商官网/控制台地址（可选）
 }
 
 export interface ApiProfile {

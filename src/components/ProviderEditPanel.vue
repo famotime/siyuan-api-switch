@@ -11,13 +11,29 @@
           <input type="text" class="b3-text-field" v-model="localProvider.displayName" placeholder="如 DeepSeek 官方 / SiliconFlow" />
         </div>
         <div class="form-group col-6">
-          <label>协议类型 *</label>
-          <select class="b3-select" v-model="localProvider.protocol" @change="onProtocolChange">
-            <option value="openai">OpenAI 兼容 (Chat Completions)</option>
-            <option value="openai-responses">OpenAI Responses</option>
-            <option value="anthropic-messages">Anthropic Messages</option>
-            <option value="systemone">TypeSafe System One (Jev 决策模型)</option>
-          </select>
+          <label>官网网址</label>
+          <div class="input-link-wrapper">
+            <input
+              type="text"
+              class="b3-text-field"
+              v-model="localProvider.providerUrl"
+              placeholder="https://...（可选）"
+            />
+            <button
+              class="link-jump-btn"
+              type="button"
+              :disabled="!localProvider.providerUrl?.trim()"
+              @click="openWebsite(localProvider.providerUrl)"
+              :data-tooltip="localProvider.providerUrl?.trim() ? '在浏览器打开官网' : '请输入官网网址'"
+              data-tooltip-position="left"
+            >
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -27,13 +43,13 @@
       </div>
 
       <div class="form-group">
-        <label>API 密钥 (API Key) *</label>
+        <label>API 密钥 (API Key)</label>
         <div class="input-password-wrapper">
           <input
             :type="showApiKey ? 'text' : 'password'"
             class="b3-text-field"
             v-model="localProvider.apiKey"
-            placeholder="sk-..."
+            placeholder="sk-...（可选）"
           />
           <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? '隐藏密钥' : '显示密钥'" data-tooltip-position="left">
             <svg v-if="showApiKey" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -43,15 +59,24 @@
       </div>
 
       <div class="form-row">
-        <div class="form-group col-6">
+        <div class="form-group col-5">
+          <label>协议类型 *</label>
+          <select class="b3-select" v-model="localProvider.protocol" @change="onProtocolChange">
+            <option value="openai">OpenAI 兼容 (Chat Completions)</option>
+            <option value="openai-responses">OpenAI Responses</option>
+            <option value="anthropic-messages">Anthropic Messages</option>
+            <option value="systemone">TypeSafe System One (Jev 决策模型)</option>
+          </select>
+        </div>
+        <div class="form-group col-3">
           <label>请求超时 (秒)</label>
           <input type="number" class="b3-text-field" v-model.number="localProvider.requestTimeout" placeholder="默认 30" min="1" max="600" />
         </div>
-        <div class="form-group col-6">
+        <div class="form-group col-2">
           <label>状态</label>
-          <label class="form-checkbox-label" style="margin-top: 8px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <label class="form-checkbox-label" style="height: 28px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; margin: 0;">
             <input type="checkbox" v-model="localProvider.enabled" />
-            <span>启用此提供商</span>
+            <span>启用</span>
           </label>
         </div>
       </div>
@@ -225,6 +250,7 @@ const getNormalizedCurrentData = (): ApiProvider => {
   }
   return {
     ...localProvider.value,
+    providerUrl: (localProvider.value.providerUrl || "").trim(),
     headers: parsedHeaders,
     models: localProvider.value.models ? [...localProvider.value.models] : [],
   };
@@ -281,8 +307,16 @@ const currentDraft = computed<ProviderDraft>(() => {
     requestTimeout: localProvider.value.requestTimeout ?? 30,
     headers: parsedHeaders,
     models: (localProvider.value.models || []).map((m) => ({ id: m.id, name: m.name })),
+    providerUrl: (localProvider.value.providerUrl || "").trim(),
   };
 });
+
+const openWebsite = (url?: string) => {
+  const target = (url || "").trim();
+  if (!target) return;
+  const fullUrl = /^https?:\/\//i.test(target) ? target : `https://${target}`;
+  window.open(fullUrl, "_blank");
+};
 
 const onProtocolChange = () => {
   // 命中预置（如 DeepSeek）时自动切换到该协议的专用地址；自定义网关保持不变
@@ -472,6 +506,7 @@ const handleSave = (): boolean => {
     }
   }
   localProvider.value.headers = parsedHeaders;
+  localProvider.value.providerUrl = (localProvider.value.providerUrl || "").trim();
   emit("save", localProvider.value);
   return true;
 };

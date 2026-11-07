@@ -596,6 +596,7 @@ const createProviderFromPreset = (presetId: string) => {
         requestTimeout: 30,
         headers: {},
         models: [],
+        providerUrl: "",
       }
     } else {
       // 预置模板：带名称/协议/地址/推荐模型池，容量优先取内置快照表
@@ -616,6 +617,7 @@ const createProviderFromPreset = (presetId: string) => {
         requestTimeout: 30,
         headers: {},
         models,
+        providerUrl: preset.providerUrl || "",
       }
     }
   })
@@ -672,18 +674,12 @@ const selectPlugin = (id: string) => {
 }
 
 // 提供商保存与删除
-const isLocalBaseUrl = (url: string) => /\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//i.test(url.trim()) || /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/?$/i.test(url.trim())
-
 const saveProvider = async (providerData: ApiProvider, skipReselect = false): Promise<boolean> => {
-  const isLocal = isLocalBaseUrl(providerData.baseUrl || "")
   if (!providerData.displayName.trim() || !providerData.baseUrl.trim()) {
     showMessage("请填写提供商名称与 Base URL", 5000, "error")
     return false
   }
-  if (!providerData.apiKey.trim() && !isLocal) {
-    showMessage("请填写 API Key（本地服务如 Ollama / LM Studio 可留空）", 5000, "error")
-    return false
-  }
+  providerData.providerUrl = (providerData.providerUrl || "").trim()
 
   try {
     let targetId = providerData.id

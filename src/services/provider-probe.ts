@@ -18,6 +18,7 @@ export interface ProviderDraft {
   requestTimeout?: number;
   headers?: Record<string, string>;
   models?: Array<{ id?: string; name?: string; [key: string]: any }>;
+  providerUrl?: string;
 }
 
 export interface ModelsFetchResult {
@@ -118,14 +119,17 @@ export async function fetchSystemOneModels(draft: ProviderDraft): Promise<Models
   if (baseUrl.includes("tokendance.space")) {
     try {
       const gatewayModelsUrl = "https://tokendance.space/gateway/v1/models";
+      const gatewayHeaders: Array<Record<string, string>> = [
+        { "User-Agent": "siyuan-api-switch" },
+      ];
+      if ((draft.apiKey || "").trim()) {
+        gatewayHeaders.unshift({ Authorization: `Bearer ${(draft.apiKey || "").trim()}` });
+      }
       const res: any = await fetchSyncPost("/api/network/forwardProxy", {
         url: gatewayModelsUrl,
         method: "GET",
         timeout: 10000,
-        headers: [
-          { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
-          { "User-Agent": "siyuan-api-switch" },
-        ],
+        headers: gatewayHeaders,
       });
       if (res && res.code === 0 && res.data?.status === 200 && res.data?.body) {
         const parsed = typeof res.data.body === "string" ? JSON.parse(res.data.body) : res.data.body;
@@ -181,8 +185,10 @@ export async function testSystemOneConnection(draft: ProviderDraft, start: numbe
   const candidateModel = draft.models?.[0]?.name || draft.models?.[0]?.id || "bocha-jev-v1";
   const headers: Array<Record<string, string>> = [
     { "content-type": "application/json" },
-    { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
   ];
+  if ((draft.apiKey || "").trim()) {
+    headers.push({ Authorization: `Bearer ${(draft.apiKey || "").trim()}` });
+  }
   for (const [key, value] of Object.entries(draft.headers || {})) {
     headers.push({ [key]: value });
   }
@@ -294,8 +300,10 @@ export async function testSystemOneModel(draft: ProviderDraft, modelName: string
   const url = resolveSystemOneEndpoint(draft.baseUrl);
   const headers: Array<Record<string, string>> = [
     { "content-type": "application/json" },
-    { Authorization: `Bearer ${(draft.apiKey || "").trim()}` },
   ];
+  if ((draft.apiKey || "").trim()) {
+    headers.push({ Authorization: `Bearer ${(draft.apiKey || "").trim()}` });
+  }
   for (const [key, value] of Object.entries(draft.headers || {})) {
     headers.push({ [key]: value });
   }
@@ -563,9 +571,11 @@ async function sendProbeRequest(
     url = /\/v1$/i.test(baseUrl) ? `${baseUrl}/messages` : `${baseUrl}/v1/messages`;
     headers = [
       { "content-type": "application/json" },
-      { "x-api-key": (draft.apiKey || "").trim() },
       { "anthropic-version": "2023-06-01" },
     ];
+    if ((draft.apiKey || "").trim()) {
+      headers.push({ "x-api-key": (draft.apiKey || "").trim() });
+    }
     payload = {
       model,
       max_tokens: 1,
@@ -576,8 +586,10 @@ async function sendProbeRequest(
     url = resolveSystemOneEndpoint(baseUrl);
     headers = [
       { "content-type": "application/json" },
-      { "Authorization": `Bearer ${(draft.apiKey || "").trim()}` },
     ];
+    if ((draft.apiKey || "").trim()) {
+      headers.push({ "Authorization": `Bearer ${(draft.apiKey || "").trim()}` });
+    }
     payload = {
       model: model || "jev-latest",
       state: buildFillerContent(targetTokens),
@@ -592,8 +604,10 @@ async function sendProbeRequest(
     url = `${baseUrl}/chat/completions`;
     headers = [
       { "content-type": "application/json" },
-      { "Authorization": `Bearer ${(draft.apiKey || "").trim()}` },
     ];
+    if ((draft.apiKey || "").trim()) {
+      headers.push({ "Authorization": `Bearer ${(draft.apiKey || "").trim()}` });
+    }
     payload = {
       model,
       max_tokens: 1,

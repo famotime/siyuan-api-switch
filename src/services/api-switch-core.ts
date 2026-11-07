@@ -370,6 +370,10 @@ export class ApiSwitchCore {
     return this.profileStore.toSharedConfig(effective);
   }
 
+  public toSharedConfig(effective: ApiProfile): SharedConfig {
+    return this.profileStore.toSharedConfig(effective);
+  }
+
   // ===================== API 提供商管理 (Providers) =====================
 
   getProviders(): ApiProvider[] {

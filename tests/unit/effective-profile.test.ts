@@ -14,6 +14,7 @@ describe("Profile 有效参数继承解析 (resolveEffectiveProfile)", () => {
       "X-Provider-Header": "provider-val",
       "Authorization": "Bearer overrideme",
     },
+    providerUrl: "https://platform.deepseek.com",
     models: [
       { id: "deepseek-chat", name: "deepseek-chat", displayName: "DeepSeek V3" },
       { id: "deepseek-reasoner", name: "deepseek-reasoner", displayName: "DeepSeek R1" },
@@ -101,5 +102,61 @@ describe("Profile 有效参数继承解析 (resolveEffectiveProfile)", () => {
 
     const resolved = apiSwitchCore.resolveEffectiveProfile(profileWithTimeout);
     expect(resolved.requestTimeoutSeconds).toBe(120);
+  });
+
+  it("Profile 正确继承 Provider 的 providerUrl，若自身指定则优先使用自身的值", () => {
+    const linkedProfile: ApiProfile = {
+      id: "prof_inherited_url",
+      name: "Inherit URL Profile",
+      providerId: "provider_deepseek",
+      provider: "openai",
+      baseUrl: "",
+      apiKey: "",
+      model: "deepseek-chat",
+    };
+
+    const resolved = apiSwitchCore.resolveEffectiveProfile(linkedProfile);
+    expect(resolved.providerUrl).toBe("https://platform.deepseek.com");
+
+    const overriddenProfile: ApiProfile = {
+      ...linkedProfile,
+      id: "prof_override_url",
+      providerUrl: "https://custom.deepseek.com",
+    };
+    const resolvedOverride = apiSwitchCore.resolveEffectiveProfile(overriddenProfile);
+    expect(resolvedOverride.providerUrl).toBe("https://custom.deepseek.com");
+
+    const shared = apiSwitchCore.toSharedConfig(resolved);
+    expect(shared.providerUrl).toBe("https://platform.deepseek.com");
+  });
+
+  it("支持 API Key 为空的免密 Provider，Profile 正确继承空 API Key", async () => {
+    const localNoAuthProv = await apiSwitchCore.addProvider({
+      displayName: "本地免密 Ollama",
+      baseUrl: "http://127.0.0.1:11434/v1",
+      apiKey: "",
+      protocol: "openai",
+      models: [{ id: "qwen2.5:7b", name: "qwen2.5:7b" }],
+      providerUrl: "https://ollama.com",
+    });
+
+    const profile: ApiProfile = {
+      id: "prof_local_ollama",
+      name: "Ollama 本地配置",
+      providerId: localNoAuthProv.id,
+      provider: "openai",
+      baseUrl: "",
+      apiKey: "",
+      model: "qwen2.5:7b",
+    };
+
+    const resolved = apiSwitchCore.resolveEffectiveProfile(profile);
+    expect(resolved.apiKey).toBe("");
+    expect(resolved.baseUrl).toBe("http://127.0.0.1:11434/v1");
+    expect(resolved.providerUrl).toBe("https://ollama.com");
+
+    const shared = apiSwitchCore.toSharedConfig(resolved);
+    expect(shared.apiKey).toBe("");
+    expect(shared.providerUrl).toBe("https://ollama.com");
   });
 });

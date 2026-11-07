@@ -392,5 +392,33 @@ describe("配置一致性校验与防重复配置机制", () => {
       // 成功合并新模型
       expect(provs[0].models).toHaveLength(2);
     });
+
+    it("提供商支持空 apiKey 保存与匹配，正确保存与清洗 providerUrl", async () => {
+      const p1 = await apiSwitchCore.addProvider({
+        displayName: "本地 Ollama",
+        baseUrl: "http://localhost:11434/v1",
+        apiKey: "",
+        protocol: "openai",
+        models: [{ id: "llama3", name: "llama3" }],
+        providerUrl: "  https://ollama.com  ",
+      });
+      expect(p1.apiKey).toBe("");
+      expect(p1.providerUrl).toBe("https://ollama.com");
+
+      // 匹配测试：空 apiKey 与规范化 baseUrl 能正确匹配已有提供商
+      const matched = apiSwitchCore.findMatchingProvider({
+        baseUrl: "http://localhost:11434/v1/",
+        apiKey: "",
+      });
+      expect(matched?.id).toBe(p1.id);
+
+      // 更新 providerUrl，去除首尾多余空格
+      await apiSwitchCore.updateProvider({
+        ...p1,
+        providerUrl: " https://ollama.com/library ",
+      });
+      const updated = apiSwitchCore.getProvider(p1.id);
+      expect(updated?.providerUrl).toBe("https://ollama.com/library");
+    });
   });
 });
