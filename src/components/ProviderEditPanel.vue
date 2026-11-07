@@ -171,8 +171,25 @@
     <div class="form-actions">
       <button class="b3-button b3-button--error" v-if="!isNew" @click.stop="$emit('delete', localProvider.id)" type="button">删除</button>
       <div class="flex-spacer"></div>
+      <transition name="fade">
+        <span v-if="isSaved" class="saved-inline-hint">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>已保存</span>
+        </span>
+      </transition>
       <button class="b3-button b3-button--cancel" @click="$emit('cancel')">取消</button>
-      <button class="b3-button b3-button--primary" @click="handleSave">保存提供商</button>
+      <button 
+        class="b3-button b3-button--primary" 
+        :class="{ 'b3-button--saved': isSaved }" 
+        @click="handleSave"
+      >
+        <svg v-if="isSaved" class="saved-btn-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>{{ isSaved ? '已保存' : '保存提供商' }}</span>
+      </button>
     </div>
 
     <!-- 探测容量确认弹窗 -->
@@ -190,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch, onUnmounted } from "vue";
 import { showMessage } from "siyuan";
 import { ApiProvider, ApiProviderModel, AiProtocol } from "@/types";
 import { getPresetProtocolBaseUrl } from "@/constants/providers";
@@ -232,6 +249,37 @@ const actionMessage = ref("");
 const actionOk = ref<boolean | null>(null);
 const probeConfirm = ref<{ show: boolean; text: string }>({ show: false, text: "" });
 
+// 保存成功轻量提示反馈
+const isSaved = ref(false);
+let savedTimer: any = null;
+
+const showSavedFeedback = () => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+  isSaved.value = true;
+  savedTimer = setTimeout(() => {
+    isSaved.value = false;
+    savedTimer = null;
+  }, 1800);
+};
+
+const clearSavedFeedback = () => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+  isSaved.value = false;
+};
+
+onUnmounted(() => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+});
+
 const setActionMessage = (text: string, ok: boolean | null) => {
   actionMessage.value = text;
   actionOk.value = ok;
@@ -271,7 +319,10 @@ const resetDirty = () => {
 
 watch(
   () => props.provider,
-  (newVal) => {
+  (newVal, oldVal) => {
+    if (oldVal && newVal?.id !== oldVal?.id) {
+      clearSavedFeedback();
+    }
     localProvider.value = {
       ...newVal,
       models: newVal.models ? [...newVal.models] : [],
@@ -287,6 +338,17 @@ watch(
     });
   },
   { immediate: true, deep: true }
+);
+
+// 监听 localProvider 或 headersText，当变 dirty 时清除已保存提示
+watch(
+  [localProvider, headersText],
+  () => {
+    if (isSaved.value && isDirty()) {
+      clearSavedFeedback();
+    }
+  },
+  { deep: true }
 );
 
 // 当前表单草稿（未保存的值即可测试，内核 listModels/testModel 支持传草稿）
@@ -516,5 +578,7 @@ defineExpose({
   resetDirty,
   getCurrentData: getNormalizedCurrentData,
   handleSave,
+  showSavedFeedback,
+  clearSavedFeedback,
 });
 </script>

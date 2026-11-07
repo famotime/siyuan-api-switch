@@ -184,14 +184,31 @@
     <div class="form-actions">
       <button class="b3-button b3-button--error" v-if="!isNew" @click.stop="$emit('delete', localProfile.id)" type="button">删除</button>
       <div class="flex-spacer"></div>
+      <transition name="fade">
+        <span v-if="isSaved" class="saved-inline-hint">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>已保存</span>
+        </span>
+      </transition>
       <button class="b3-button b3-button--cancel" @click="$emit('cancel')">取消</button>
-      <button class="b3-button b3-button--primary" @click="handleSave">保存</button>
+      <button 
+        class="b3-button b3-button--primary" 
+        :class="{ 'b3-button--saved': isSaved }" 
+        @click="handleSave"
+      >
+        <svg v-if="isSaved" class="saved-btn-icon" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>{{ isSaved ? '已保存' : '保存' }}</span>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from "vue";
+import { ref, computed, watch, nextTick, onUnmounted } from "vue";
 import { ApiProfile } from "@/services/api-switch-core";
 import { ApiProvider } from "@/types";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST } from "@/constants/providers";
@@ -215,6 +232,35 @@ const showAdvanced = ref(false);
 const newModelInput = ref("");
 const isNameManuallyEdited = ref(false);
 const initialSnapshot = ref("");
+const isSaved = ref(false);
+let savedTimer: any = null;
+
+const showSavedFeedback = () => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+  isSaved.value = true;
+  savedTimer = setTimeout(() => {
+    isSaved.value = false;
+    savedTimer = null;
+  }, 1800);
+};
+
+const clearSavedFeedback = () => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+  isSaved.value = false;
+};
+
+onUnmounted(() => {
+  if (savedTimer) {
+    clearTimeout(savedTimer);
+    savedTimer = null;
+  }
+});
 
 const presetOptions = PRESET_PROVIDER_LIST.filter((p) => p.category !== "custom");
 
@@ -241,7 +287,10 @@ const updateInitialSnapshot = () => {
 
 watch(
   () => props.profile,
-  (newVal) => {
+  (newVal, oldVal) => {
+    if (oldVal && newVal?.id !== oldVal?.id) {
+      clearSavedFeedback();
+    }
     localProfile.value = {
       ...newVal,
       models: newVal.models ? [...newVal.models] : [],
@@ -257,6 +306,17 @@ watch(
     });
   },
   { immediate: true, deep: true }
+);
+
+// 监听 localProfile，当用户在已保存后重新改动导致变 dirty 时，立即清除已保存提示
+watch(
+  localProfile,
+  () => {
+    if (isSaved.value && isDirty()) {
+      clearSavedFeedback();
+    }
+  },
+  { deep: true }
 );
 
 // 联动自动更新名称（当且仅当新建且用户尚未手动自定义输入名称）
@@ -309,6 +369,8 @@ defineExpose({
     return localProfile.value;
   },
   handleSave,
+  showSavedFeedback,
+  clearSavedFeedback,
 });
 
 const currentAvailableModels = computed(() => {

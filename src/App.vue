@@ -50,6 +50,21 @@
           </div>
         </div>
 
+        <!-- 弹窗内顶部轻量通知 Toast (居中悬浮) -->
+        <transition name="dialog-toast-anim">
+          <div v-if="toast.show" :class="['dialog-toast', `dialog-toast--${toast.type}`]">
+            <svg v-if="toast.type === 'success' || toast.type === 'info'" class="dialog-toast-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <svg v-else class="dialog-toast-icon" viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            <span class="dialog-toast-text">{{ toast.message }}</span>
+          </div>
+        </transition>
+
         <!-- 主体区域 -->
         <div class="dialog-body">
           <!-- 左侧导航栏 -->
@@ -302,7 +317,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, PRESET_PROVIDER_LIST, AutoProviderResult } from "@/services/api-switch-core"
 import { ApiProvider, ApiProviderModel } from "@/types"
 import { lookupModelContextLength } from "@/constants/model-contexts"
@@ -342,6 +357,26 @@ const {
   onHeaderMouseDown,
   onResizeStart,
 } = useWindowDrag(() => enableDebugLog.value)
+
+// 弹窗内轻量 Toast 提示
+const toast = ref<{ show: boolean; message: string; type: "success" | "info" | "error" }>({
+  show: false,
+  message: "",
+  type: "info",
+})
+let toastTimer: any = null
+
+const showToast = (message: string, type: "success" | "info" | "error" = "info", duration = 2000) => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
+  toast.value = { show: true, message, type }
+  toastTimer = setTimeout(() => {
+    toast.value.show = false
+    toastTimer = null
+  }, duration)
+}
 
 // 响应式数据
 const providers = ref<ApiProvider[]>([])
@@ -538,6 +573,10 @@ watch(showDialog, (val) => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", handleGlobalKeydown, true)
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+    toastTimer = null
+  }
 })
 
 // 刷新全部数据
@@ -677,6 +716,7 @@ const selectPlugin = (id: string) => {
 const saveProvider = async (providerData: ApiProvider, skipReselect = false): Promise<boolean> => {
   if (!providerData.displayName.trim() || !providerData.baseUrl.trim()) {
     showMessage("请填写提供商名称与 Base URL", 5000, "error")
+    showToast("请填写提供商名称与 Base URL", "error")
     return false
   }
   providerData.providerUrl = (providerData.providerUrl || "").trim()
@@ -694,14 +734,19 @@ const saveProvider = async (providerData: ApiProvider, skipReselect = false): Pr
 
     refreshData()
     showMessage("提供商配置已保存", 3000, "info")
+    showToast("提供商配置已保存", "success")
     providerPanelRef.value?.resetDirty?.()
 
     if (!skipReselect && targetId) {
       selectProvider(targetId)
     }
+    nextTick(() => {
+      providerPanelRef.value?.showSavedFeedback?.()
+    })
     return true
   } catch (err: any) {
     showMessage(`保存提供商失败: ${err?.message || err}`, 5000, "error")
+    showToast(`保存提供商失败: ${err?.message || err}`, "error")
     return false
   }
 }
@@ -749,6 +794,7 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
 
   if (!profileData.name.trim() || !profileData.model.trim()) {
     showMessage("请填写配置名称与模型名称", 5000, "error")
+    showToast("请填写配置名称与模型名称", "error")
     return false
   }
 
@@ -758,6 +804,7 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
 
   if (!profileData.providerId && (!effectiveBaseUrl || !profileData.apiKey?.trim())) {
     showMessage("独立配置必须填写 API 密钥与基础 URL", 5000, "error")
+    showToast("独立配置必须填写 API 密钥与基础 URL", "error")
     return false
   }
 
@@ -781,11 +828,14 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
       const provName = autoRes.provider.displayName
       if (autoRes.action === "created") {
         showMessage(`API 配置已保存，并已自动生成提供商「${provName}」`, 4000, "info")
+        showToast(`API 配置已保存（已生成「${provName}」）`, "success")
       } else {
         showMessage(`API 配置已保存，并已关联至已有提供商「${provName}」`, 4000, "info")
+        showToast(`API 配置已保存（已关联「${provName}」）`, "success")
       }
     } else {
       showMessage("API 配置已保存", 3000, "info")
+      showToast("API 配置已保存", "success")
     }
 
     profilePanelRef.value?.resetDirty?.()
@@ -793,9 +843,13 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
     if (!skipReselect && targetId) {
       selectProfile(targetId)
     }
+    nextTick(() => {
+      profilePanelRef.value?.showSavedFeedback?.()
+    })
     return true
   } catch (err: any) {
     showMessage(`保存配置失败: ${err?.message || err}`, 5000, "error")
+    showToast(`保存配置失败: ${err?.message || err}`, "error")
     return false
   }
 }

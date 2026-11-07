@@ -1,3 +1,8 @@
+// 保证思源全局消息通知在插件模态蒙层之上显示，不被插件弹窗遮挡
+#message.b3-snackbars {
+  z-index: 2000 !important;
+}
+
 .plugin-app-main {
   width: 100vw;
   height: 100vh;
@@ -767,6 +772,7 @@
   border-top: 1px solid var(--b3-border-color);
   background-color: var(--b3-theme-surface);
   display: flex;
+  align-items: center;
   gap: 12px;
 }
 
@@ -1518,4 +1524,113 @@ html[data-theme-mode="dark"] .plugin-app-main {
     justify-content: flex-end;
     gap: 10px;
   }
+}
+
+
+// ==========================================
+// 保存成功轻量提示反馈与按钮联动
+// ==========================================
+.b3-button--saved {
+  background-color: var(--b3-theme-success, #2e7d32) !important;
+  color: var(--b3-theme-on-success, #ffffff) !important;
+  border-color: transparent !important;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+
+  .saved-btn-icon {
+    margin-right: 4px;
+    animation: savedIconPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    stroke: var(--b3-theme-on-success, #ffffff) !important;
+  }
+}
+
+.saved-inline-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--b3-theme-success, #2e7d32);
+  user-select: none;
+  animation: fadeIn 0.2s ease;
+
+  svg {
+    stroke: var(--b3-theme-success, #2e7d32) !important;
+  }
+}
+
+@keyframes savedIconPop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+// ==========================================
+// 弹窗内顶部轻量居中通知 Toast
+// ==========================================
+.dialog-toast {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  z-index: 100;
+  pointer-events: none;
+  background-color: var(--b3-theme-surface);
+  color: var(--b3-theme-on-surface);
+  border: 1px solid var(--b3-border-color);
+  backdrop-filter: blur(8px);
+
+  &--success {
+    border-color: var(--b3-theme-success, #2e7d32);
+    color: var(--b3-theme-success, #2e7d32);
+
+    .dialog-toast-icon {
+      stroke: var(--b3-theme-success, #2e7d32) !important;
+    }
+  }
+
+  &--info {
+    border-color: var(--b3-theme-primary, #4285f4);
+    color: var(--b3-theme-primary, #4285f4);
+
+    .dialog-toast-icon {
+      stroke: var(--b3-theme-primary, #4285f4) !important;
+    }
+  }
+
+  &--error {
+    border-color: var(--b3-theme-error, #d32f2f);
+    color: var(--b3-theme-error, #d32f2f);
+
+    .dialog-toast-icon {
+      stroke: var(--b3-theme-error, #d32f2f) !important;
+    }
+  }
+}
+
+.dialog-toast-anim-enter-active,
+.dialog-toast-anim-leave-active {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dialog-toast-anim-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -10px) scale(0.92);
+}
+
+.dialog-toast-anim-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -4px) scale(0.96);
 }
