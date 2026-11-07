@@ -127,6 +127,21 @@ export interface SiyuanAiJson {
   };
 }
 
+export interface ImportBackupResult {
+  providersAdded: number;
+  providersSkipped: number;
+  profilesAdded: number;
+  profilesSkipped: number;
+  modelsMerged: number;
+}
+
+export interface BackupConfigFile {
+  version: string;
+  exportTime: string;
+  providers: ApiProvider[];
+  profiles: ApiProfile[];
+}
+
 export type PluginBindingState = "full" | "partial" | "none";
 
 export interface PluginSlotDefinition {

@@ -1,7 +1,7 @@
 import { Plugin } from "siyuan";
-import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions, PluginBindingState } from "@/types";
+import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions, PluginBindingState, ImportBackupResult, BackupConfigFile } from "@/types";
 import { ProviderStore } from "./provider-store";
-import { ProfileStore, ApiProfile } from "./profile-store";
+import { ProfileStore, ApiProfile, normalizeUrl, normalizeString } from "./profile-store";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo, cleanRawProviderDisplayName, resolveProviderDisplayName } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
@@ -12,7 +12,7 @@ import { migrateLegacyAiProtocols } from "./config-migration";
 
 export type { ApiProfile } from "./profile-store";
 export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotInfo, PluginBindingState } from "./plugin-binding-manager";
-export type { RegisterPluginOptions } from "@/types";
+export type { RegisterPluginOptions, ImportBackupResult, BackupConfigFile } from "@/types";
 export { extractSiyuanAiSettings, cleanRawProviderDisplayName, resolveProviderDisplayName };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
 export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
@@ -923,6 +923,317 @@ export class ApiSwitchCore {
     if (!res.success && res.appliedScopes.length === 0) {
       throw new Error(res.message);
     }
+  }
+
+  // ===================== 全量备份导入导出与智能去重 =====================
+
+  /**
+   * 全量导出当前所有提供商与 API 配置（配置资产库格式，不含插件接管绑定）
+   */
+  public exportBackupConfig(): string {
+    const providers = this.providerStore.getProviders().map((p) => ({
+      ...p,
+      displayName: cleanRawProviderDisplayName(
+        p.displayName,
+        undefined,
+        (p.models || []).map((m) => m.name || m.id)
+      ),
+    }));
+    const profiles = this.profileStore.getProfiles().map((p) => ({ ...p }));
+
+    const backupData: BackupConfigFile = {
+      version: "1.0",
+      exportTime: new Date().toISOString(),
+      providers,
+      profiles,
+    };
+
+    return JSON.stringify(backupData, null, 2);
+  }
+
+  /**
+   * 全量导入提供商与 API 配置，具备智能去重与模型补全能力
+   * 1. 提供商判重：若 displayName 相同，或 BaseURL 与 API Key 相同，判定为重复并跳过新建；
+   *    同时增量合并导入文件中包含的新模型至已有提供商的模型池；
+   * 2. Profile 判重：若名称 name 相同，或关联相同提供商且模型+核心连接参数完全一致，判定为重复并跳过；
+   * 3. 关联重映射：导入新 Profile 若关联了被跳过的重复提供商，自动将其 providerId 重新映射至本地已有提供商 ID。
+   */
+  public async importBackupConfig(content: string): Promise<ImportBackupResult> {
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("无效的 JSON 格式");
+    }
+
+    let rawProviders: any[] = [];
+    let rawProfiles: any[] = [];
+
+    // 格式识别 1: 纯 profile 数组
+    if (Array.isArray(parsed)) {
+      rawProfiles = parsed;
+    } else {
+      // 兼容可能包装在 ai: { ... } 中的对象（如 conf.json）
+      const realAi = parsed.ai && typeof parsed.ai === "object" ? parsed.ai : parsed;
+
+      // 提取 providers
+      if (Array.isArray(realAi.providers)) {
+        rawProviders = realAi.providers;
+      }
+
+      // 提取 profiles:
+      // 优先取根级的 profiles，其次取 _siyuanApiSwitch.profiles
+      if (Array.isArray(realAi.profiles)) {
+        rawProfiles = realAi.profiles;
+      } else if (realAi._siyuanApiSwitch?.profiles && Array.isArray(realAi._siyuanApiSwitch.profiles)) {
+        rawProfiles = realAi._siyuanApiSwitch.profiles;
+      } else {
+        // 如果是原生思源 ai.json，自动从 editing / agent / decision 派生候选 Profiles
+        const extracted = extractSiyuanAiSettings(realAi);
+        if (extracted.editing?.model) {
+          rawProfiles.push({
+            name: "思源-编辑器",
+            ...extracted.editing,
+            models: [extracted.editing.model],
+            memo: "从原生 ai.json 导入的编辑器配置",
+          });
+        }
+        if (extracted.agent?.model) {
+          rawProfiles.push({
+            name: "思源-智能体",
+            ...extracted.agent,
+            models: [extracted.agent.model],
+            memo: "从原生 ai.json 导入的智能体配置",
+          });
+        }
+        if (extracted.decision) {
+          rawProfiles.push({
+            name: "思源-决策模型",
+            provider: "custom",
+            protocol: "custom",
+            baseUrl: extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone",
+            apiKey: extracted.decision.apiKey,
+            model: extracted.decision.model || "jev-latest",
+            models: [extracted.decision.model || "jev-latest"],
+            requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds ?? 30,
+            isDecisionModel: true,
+            memo: "从原生 ai.json 导入的决策模型配置",
+          });
+        }
+      }
+    }
+
+    const currentProviders = [...this.providerStore.getProviders()];
+    let providersAdded = 0;
+    let providersSkipped = 0;
+    let modelsMerged = 0;
+    const providerIdMap = new Map<string, string>(); // importedId -> existingId or newId
+
+    for (const rawP of rawProviders) {
+      if (!rawP || typeof rawP !== "object") continue;
+      const originalId = rawP.id ? String(rawP.id) : "";
+      const prov: ApiProvider = {
+        id: originalId || "provider_" + Math.random().toString(36).substring(2, 11),
+        displayName: cleanRawProviderDisplayName(
+          rawP.displayName || rawP.id || "未命名提供商",
+          undefined,
+          Array.isArray(rawP.models) ? rawP.models.map((m: any) => m.name || m.id) : []
+        ),
+        enabled: rawP.enabled ?? true,
+        baseUrl: extractBaseUrl(rawP),
+        apiKey: extractApiKey(rawP),
+        protocol: normalizeAiProtocol(rawP.protocol),
+        requestTimeout: rawP.requestTimeout ?? 30,
+        headers: rawP.headers && typeof rawP.headers === "object" ? rawP.headers : {},
+        models: Array.isArray(rawP.models)
+          ? rawP.models.map((m: any) => ({
+              id: m.id || m.name,
+              name: m.name || m.id,
+              displayName: m.displayName || m.name,
+              enabled: m.enabled ?? true,
+              contextLength: m.contextLength,
+            }))
+          : [],
+        providerUrl: rawP.providerUrl ? String(rawP.providerUrl) : "",
+      };
+
+      // 判重规则：BaseURL+Key 或 displayName 相同，判定为重复提供商
+      const matchedIdx = currentProviders.findIndex((existing) => {
+        // 1. 本地同 ID
+        if (prov.id && existing.id && existing.id === prov.id) return true;
+        // 2. 名称相同且非空
+        if (
+          prov.displayName &&
+          existing.displayName &&
+          prov.displayName.trim().toLowerCase() === existing.displayName.trim().toLowerCase()
+        ) {
+          return true;
+        }
+        // 3. 核心连接参数相同（baseUrl + apiKey）
+        const exUrl = normalizeUrl(existing.baseUrl);
+        const tgtUrl = normalizeUrl(prov.baseUrl);
+        const exKey = normalizeString(existing.apiKey);
+        const tgtKey = normalizeString(prov.apiKey);
+        if (exUrl && tgtUrl && exUrl === tgtUrl && exKey === tgtKey) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchedIdx !== -1) {
+        // 重复提供商：跳过新建，记录映射
+        const existing = currentProviders[matchedIdx];
+        if (originalId) {
+          providerIdMap.set(originalId, existing.id);
+        }
+        providersSkipped++;
+
+        // 增量补全已有提供商的模型池
+        const mergedModels = [...(existing.models || [])];
+        let modelsChanged = false;
+        if (Array.isArray(prov.models)) {
+          for (const m of prov.models) {
+            const mIdx = mergedModels.findIndex(
+              (em) => em.id === m.id || (em.name && em.name === m.name)
+            );
+            if (mIdx !== -1) {
+              // 模型已存在，如果本地缺失 contextLength 但导入项包含，则增量补齐容量
+              if (!mergedModels[mIdx].contextLength && m.contextLength) {
+                mergedModels[mIdx] = { ...mergedModels[mIdx], contextLength: m.contextLength };
+                modelsChanged = true;
+              }
+            } else {
+              mergedModels.push(m);
+              modelsChanged = true;
+              modelsMerged++;
+            }
+          }
+        }
+        if (modelsChanged) {
+          existing.models = mergedModels;
+          currentProviders[matchedIdx] = existing;
+        }
+      } else {
+        // 不重复：添加新提供商，确保 ID 唯一
+        let targetId = prov.id;
+        while (currentProviders.some((p) => p.id === targetId)) {
+          targetId = "provider_" + Math.random().toString(36).substring(2, 11);
+        }
+        prov.id = targetId;
+        if (originalId) {
+          providerIdMap.set(originalId, targetId);
+        }
+        currentProviders.push(prov);
+        providersAdded++;
+      }
+    }
+    this.providerStore.setProviders(currentProviders);
+
+    let profilesAdded = 0;
+    let profilesSkipped = 0;
+    const currentProfiles = [...this.profileStore.getProfiles()];
+
+    for (const rawProf of rawProfiles) {
+      if (!rawProf || typeof rawProf !== "object") continue;
+      const originalProfId = rawProf.id ? String(rawProf.id) : "";
+
+      // 关联重映射：将 providerId 映射至本地对应的 Provider ID
+      let mappedProviderId = rawProf.providerId ? String(rawProf.providerId) : undefined;
+      if (mappedProviderId && providerIdMap.has(mappedProviderId)) {
+        mappedProviderId = providerIdMap.get(mappedProviderId);
+      }
+
+      // 若未显式挂载 providerId 但具有 baseUrl/apiKey，尝试根据连接参数关联对应提供商
+      if (!mappedProviderId && (rawProf.baseUrl || rawProf.apiKey)) {
+        const matchedP = currentProviders.find((p) => {
+          const u1 = normalizeUrl(p.baseUrl);
+          const u2 = normalizeUrl(rawProf.baseUrl);
+          const k1 = normalizeString(p.apiKey);
+          const k2 = normalizeString(rawProf.apiKey);
+          return u1 && u2 && u1 === u2 && k1 === k2;
+        });
+        if (matchedP) {
+          mappedProviderId = matchedP.id;
+        }
+      }
+
+      const normalizedProf: ApiProfile = {
+        id: originalProfId || "prof_" + Math.random().toString(36).substring(2, 11),
+        name: String(rawProf.name || rawProf.model || "未命名配置"),
+        providerId: mappedProviderId,
+        provider: String(rawProf.provider || "custom"),
+        protocol: rawProf.protocol ? String(rawProf.protocol) : undefined,
+        baseUrl: String(rawProf.baseUrl || ""),
+        apiKey: String(rawProf.apiKey || ""),
+        model: String(rawProf.model || ""),
+        models: Array.isArray(rawProf.models)
+          ? rawProf.models.map(String)
+          : rawProf.model
+          ? [String(rawProf.model)]
+          : [],
+        headers: rawProf.headers && typeof rawProf.headers === "object" ? rawProf.headers : undefined,
+        requestTimeoutSeconds:
+          rawProf.requestTimeoutSeconds !== undefined ? Number(rawProf.requestTimeoutSeconds) : undefined,
+        temperature: rawProf.temperature !== undefined ? Number(rawProf.temperature) : undefined,
+        maxTokens: rawProf.maxTokens !== undefined ? Number(rawProf.maxTokens) : undefined,
+        contextWindow: rawProf.contextWindow !== undefined ? Number(rawProf.contextWindow) : undefined,
+        maxHistoryMessages:
+          rawProf.maxHistoryMessages !== undefined ? Number(rawProf.maxHistoryMessages) : undefined,
+        maxToolCallRounds:
+          rawProf.maxToolCallRounds !== undefined ? Number(rawProf.maxToolCallRounds) : undefined,
+        sessionTimeout: rawProf.sessionTimeout !== undefined ? Number(rawProf.sessionTimeout) : undefined,
+        streamIdleTimeout:
+          rawProf.streamIdleTimeout !== undefined ? Number(rawProf.streamIdleTimeout) : undefined,
+        confirmTimeout: rawProf.confirmTimeout !== undefined ? Number(rawProf.confirmTimeout) : undefined,
+        maxRetries: rawProf.maxRetries !== undefined ? Number(rawProf.maxRetries) : undefined,
+        isDecisionModel: Boolean(rawProf.isDecisionModel),
+        memo: rawProf.memo ? String(rawProf.memo) : "",
+        providerUrl: rawProf.providerUrl ? String(rawProf.providerUrl) : "",
+      };
+
+      if (!normalizedProf.name.trim() || !normalizedProf.model.trim()) {
+        continue;
+      }
+
+      // Profile 智能去重判定：
+      // 1. 同名判定：本地已存在相同 name（不区分前后空格与大小写）
+      const hasSameName = currentProfiles.some(
+        (p) => p.name.trim().toLowerCase() === normalizedProf.name.trim().toLowerCase()
+      );
+
+      // 2. 核心参数判定：调用 findMatchingProfile 判断是否匹配到已有 Profile
+      const targetEffective = this.resolveEffectiveProfile(normalizedProf);
+      const matchRes = this.profileStore.findMatchingProfile(targetEffective, currentProviders);
+
+      if (hasSameName || (matchRes && matchRes.score >= 80)) {
+        profilesSkipped++;
+        continue;
+      }
+
+      // 不重复：确保 ID 唯一后添加
+      let targetProfId = normalizedProf.id;
+      while (currentProfiles.some((p) => p.id === targetProfId)) {
+        targetProfId = "prof_" + Math.random().toString(36).substring(2, 11);
+      }
+      normalizedProf.id = targetProfId;
+
+      // 如果是独立配置且符合自动生成 Provider，自动联动
+      if (!normalizedProf.providerId && shouldAutoGenerateProvider(normalizedProf)) {
+        await this.ensureProviderForProfile(normalizedProf);
+      }
+
+      currentProfiles.push(normalizedProf);
+      profilesAdded++;
+    }
+
+    this.profileStore.setProfiles(currentProfiles);
+    await this.save();
+
+    return {
+      providersAdded,
+      providersSkipped,
+      profilesAdded,
+      profilesSkipped,
+      modelsMerged,
+    };
   }
 
   // ===================== 对齐思源原生 ai.json 格式的导入导出 =====================

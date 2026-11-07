@@ -19,6 +19,39 @@
           <div class="header-actions">
             <!-- 业务同步操作组 -->
             <div class="header-sync-group">
+              <input 
+                type="file" 
+                ref="fileInputRef" 
+                style="display: none" 
+                accept=".json" 
+                @change="handleFileImport" 
+              />
+              <button 
+                class="header-sync-btn header-sync-btn--action" 
+                @click="triggerImport" 
+                data-tooltip="全量导入配置（智能去重）" 
+                data-tooltip-position="bottom"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>导入</span>
+              </button>
+              <button 
+                class="header-sync-btn header-sync-btn--action" 
+                @click="exportBackupAction" 
+                data-tooltip="全量导出提供商与 API 配置" 
+                data-tooltip-position="bottom"
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>导出</span>
+              </button>
               <button 
                 class="header-sync-btn header-sync-btn--read" 
                 @click="syncFromSiyuanAction" 
@@ -117,29 +150,6 @@
                     <span>API 配置文件 (Profiles)</span>
                   </div>
                   <div class="title-actions">
-                    <input 
-                      type="file" 
-                      ref="fileInputRef" 
-                      style="display: none" 
-                      accept=".json" 
-                      @change="handleFileImport" 
-                    />
-                    <button 
-                      class="title-action-btn" 
-                      @click="triggerImport" 
-                      data-tooltip="导入 API 配置"
-                      data-tooltip-position="bottom"
-                    >
-                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="17 8 12 3 7 8" style="fill:none!important"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                    </button>
-                    <button 
-                      class="title-action-btn" 
-                      @click="exportProfiles" 
-                      data-tooltip="导出 API 配置"
-                      data-tooltip-position="bottom"
-                    >
-                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="7 10 12 15 17 10" style="fill:none!important"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    </button>
                     <button 
                       class="title-action-btn" 
                       @click="createNewProfile" 
@@ -943,9 +953,28 @@ const handleFileImport = async (e: Event) => {
   reader.onload = async (event) => {
     try {
       const content = event.target?.result as string
-      const res = await apiSwitchCore.importSiyuanAiJson(content)
+      const res = await apiSwitchCore.importBackupConfig(content)
       refreshData()
-      showMessage(`成功导入！提供商: ${res.providersCount} 个，配置: ${res.profilesCount} 个`, 4000, "info")
+
+      if (res.providersAdded === 0 && res.profilesAdded === 0) {
+        const skipDetails = []
+        if (res.providersSkipped > 0) skipDetails.push(`${res.providersSkipped} 个提供商`)
+        if (res.profilesSkipped > 0) skipDetails.push(`${res.profilesSkipped} 个配置`)
+        const skipText = skipDetails.length > 0 ? `（检测到 ${skipDetails.join("、")}已存在并已去重跳过）` : ""
+        showMessage(`未导入新配置：所有配置均已存在${skipText}`, 4000, "info")
+      } else {
+        const parts = []
+        if (res.providersAdded > 0) parts.push(`提供商 +${res.providersAdded}`)
+        if (res.profilesAdded > 0) parts.push(`配置 +${res.profilesAdded}`)
+        if (res.modelsMerged > 0) parts.push(`模型池补全 +${res.modelsMerged}`)
+
+        const skippedParts = []
+        if (res.providersSkipped > 0) skippedParts.push(`提供商 ${res.providersSkipped} 个`)
+        if (res.profilesSkipped > 0) skippedParts.push(`配置 ${res.profilesSkipped} 个`)
+        const skippedText = skippedParts.length > 0 ? `，去重跳过 ${skippedParts.join("、")}` : ""
+
+        showMessage(`导入完成！新增 ${parts.join("，")}${skippedText}`, 5000, "info")
+      }
     } catch (err: any) {
       showMessage(`导入失败: ${err?.message || err}`, 5000, "error")
     } finally {
@@ -955,23 +984,26 @@ const handleFileImport = async (e: Event) => {
   reader.readAsText(file)
 }
 
-const exportProfiles = () => {
+const exportBackupAction = () => {
   handleSafeNavigate(() => {
     try {
-      const jsonStr = apiSwitchCore.exportSiyuanAiJson()
+      const jsonStr = apiSwitchCore.exportBackupConfig()
       const blob = new Blob([jsonStr], { type: "application/json" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `siyuan-ai-${new Date().toISOString().slice(0, 10)}.json`
+      a.download = `api-switch-backup-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      showMessage("配置已成功导出为 ai.json 格式", 3000, "info")
+      showMessage("已成功全量导出提供商与 API 配置", 3000, "info")
     } catch (err: any) {
       showMessage(`导出失败: ${err?.message || err}`, 5000, "error")
     }
   })
 }
+
+// 保持别名兼容
+const exportProfiles = exportBackupAction
 
 const syncFromSiyuanAction = async () => {
   handleSafeNavigate(async () => {
