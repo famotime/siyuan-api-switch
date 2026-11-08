@@ -208,7 +208,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
+import { useSavedFeedback } from "@/composables/useSavedFeedback";
+import { useDirtySnapshot } from "@/composables/useDirtySnapshot";
 import { ApiProfile } from "@/services/api-switch-core";
 import { ApiProvider } from "@/types";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST } from "@/constants/providers";
@@ -231,36 +233,8 @@ const showApiKey = ref(false);
 const showAdvanced = ref(false);
 const newModelInput = ref("");
 const isNameManuallyEdited = ref(false);
-const initialSnapshot = ref("");
-const isSaved = ref(false);
-let savedTimer: any = null;
-
-const showSavedFeedback = () => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-  isSaved.value = true;
-  savedTimer = setTimeout(() => {
-    isSaved.value = false;
-    savedTimer = null;
-  }, 1800);
-};
-
-const clearSavedFeedback = () => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-  isSaved.value = false;
-};
-
-onUnmounted(() => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-});
+// 保存反馈与脏检查快照（共享 composable，defineExpose 契约不变）
+const { isSaved, showSavedFeedback, clearSavedFeedback } = useSavedFeedback();
 
 const presetOptions = PRESET_PROVIDER_LIST.filter((p) => p.category !== "custom");
 
@@ -281,9 +255,7 @@ const generateDefaultName = () => {
   );
 };
 
-const updateInitialSnapshot = () => {
-  initialSnapshot.value = JSON.stringify(localProfile.value);
-};
+const { updateInitialSnapshot, isDirty } = useDirtySnapshot(() => localProfile.value);
 
 watch(
   () => props.profile,
@@ -341,11 +313,6 @@ const onNameBlur = () => {
   if (props.isNew && !isNameManuallyEdited.value && !localProfile.value.name.trim()) {
     localProfile.value.name = generateDefaultName();
   }
-};
-
-const isDirty = () => {
-  if (!initialSnapshot.value) return false;
-  return JSON.stringify(localProfile.value) !== initialSnapshot.value;
 };
 
 const resetDirty = () => {

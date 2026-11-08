@@ -21,7 +21,7 @@
 ## 2. 常用开发与验证命令
 
 ```bash
-npm test            # 运行 Vitest 单元测试 (tests/unit/，11 大套件 113 个用例)
+npm test            # 运行 Vitest 单元测试 (tests/unit/，18 大套件 158 个用例)
 npx tsc --noEmit    # TypeScript 静态类型检查
 npm run build       # Vite 生产构建与打包 (输出 dist/ 及 package.zip，并执行产物校验)
 npm run dev         # 增量监听构建

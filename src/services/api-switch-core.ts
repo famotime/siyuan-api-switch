@@ -1,12 +1,16 @@
 import { Plugin } from "siyuan";
 import { SharedConfig, SiyuanApiSwitch, ApiProvider, PluginSlotDefinition, RegisteredPluginSlotInfo, RegisterPluginOptions, PluginBindingState, ImportBackupResult, BackupConfigFile } from "@/types";
-import { ProviderStore } from "./provider-store";
-import { ProfileStore, ApiProfile, normalizeUrl, normalizeString } from "./profile-store";
+import { ProviderStore, mergeProviderModels } from "./provider-store";
+import { ProfileStore, ApiProfile } from "./profile-store";
+import { normalizeUrl, normalizeString } from "@/utils/config-compare";
 import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-manager";
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo, cleanRawProviderDisplayName, resolveProviderDisplayName } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 import { normalizeAiProtocol } from "@/utils/protocol";
 import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/constants/providers";
+import { SIYUAN_BUILTIN_EDITING, SIYUAN_BUILTIN_AGENT, SIYUAN_BUILTIN_DECISION } from "@/constants/siyuan-scopes";
+import { DEBUG_SETTINGS_KEY } from "@/constants/debug";
+import { genProviderId, genProfileId } from "@/utils/id";
 import { computeDefaultProfileName } from "@/utils/profile-naming";
 import { migrateLegacyAiProtocols } from "./config-migration";
 
@@ -15,7 +19,7 @@ export type { RegisteredPluginInfo, PluginSlotDefinition, RegisteredPluginSlotIn
 export type { RegisterPluginOptions, ImportBackupResult, BackupConfigFile } from "@/types";
 export { extractSiyuanAiSettings, cleanRawProviderDisplayName, resolveProviderDisplayName };
 export type { SiyuanExtractedAiInfo } from "./siyuan-adapter";
-export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "./profile-store";
+export { normalizeUrl, normalizeString, isProtocolCompatible, isProfileConfigMatching } from "@/utils/config-compare";
 export { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 export { PRESET_PROVIDERS, PRESET_PROVIDER_LIST };
 export type { PresetProviderInfo };
@@ -58,7 +62,7 @@ export interface ApiSwitchStorage {
   bindings: Record<string, string>; // pluginId -> profileId
 }
 
-const STORAGE_KEY = "config.json";
+export const STORAGE_KEY = "config.json";
 
 export class ApiSwitchCore {
   private plugin: Plugin | null = null;
@@ -117,13 +121,13 @@ export class ApiSwitchCore {
   }
 
   private log(message: string, ...args: any[]) {
-    if (localStorage.getItem("sy_api_switch_debug") === "true") {
+    if (localStorage.getItem(DEBUG_SETTINGS_KEY) === "true") {
       console.log(`[API Switch] ${message}`, ...args);
     }
   }
 
   private logError(message: string, ...args: any[]) {
-    if (localStorage.getItem("sy_api_switch_debug") === "true") {
+    if (localStorage.getItem(DEBUG_SETTINGS_KEY) === "true") {
       console.error(`[API Switch] ${message}`, ...args);
     }
   }
@@ -146,20 +150,20 @@ export class ApiSwitchCore {
 
   private async syncSiyuanBuiltinBindings() {
     try {
-      if (this.bindings["siyuan_builtin_editing"]) {
-        const profile = this.profileStore.getProfile(this.bindings["siyuan_builtin_editing"]);
+      if (this.bindings[SIYUAN_BUILTIN_EDITING]) {
+        const profile = this.profileStore.getProfile(this.bindings[SIYUAN_BUILTIN_EDITING]);
         if (profile) {
           await this.updateSiyuanSystemAi(profile, "editing");
         }
       }
-      if (this.bindings["siyuan_builtin_agent"]) {
-        const profile = this.profileStore.getProfile(this.bindings["siyuan_builtin_agent"]);
+      if (this.bindings[SIYUAN_BUILTIN_AGENT]) {
+        const profile = this.profileStore.getProfile(this.bindings[SIYUAN_BUILTIN_AGENT]);
         if (profile) {
           await this.updateSiyuanSystemAi(profile, "agent");
         }
       }
-      if (this.bindings["siyuan_builtin_decision"]) {
-        const profile = this.profileStore.getProfile(this.bindings["siyuan_builtin_decision"]);
+      if (this.bindings[SIYUAN_BUILTIN_DECISION]) {
+        const profile = this.profileStore.getProfile(this.bindings[SIYUAN_BUILTIN_DECISION]);
         if (profile) {
           await this.updateSiyuanSystemAi(profile, "decision");
         }
@@ -266,10 +270,7 @@ export class ApiSwitchCore {
         await this.bindPlugin(pluginId, "", slotId);
       },
       updateLocalConfig: (pluginId, localConfig, slotId) => {
-        const updated = this.bindingManager.updateLocalConfig(pluginId, localConfig, slotId);
-        if (updated && this.onStateChange) {
-          this.onStateChange();
-        }
+        this.updatePluginLocalConfig(pluginId, localConfig, slotId);
       },
     };
 
@@ -324,10 +325,6 @@ export class ApiSwitchCore {
     if (this.onStateChange) {
       this.onStateChange();
     }
-  }
-
-  public async unbindPlugin(pluginId: string, slotId?: string) {
-    await this.bindPlugin(pluginId, "", slotId);
   }
 
   public updatePluginLocalConfig(
@@ -645,37 +642,16 @@ export class ApiSwitchCore {
 
       const extracted = extractSiyuanAiSettings(aiConfig);
 
-      // 1. 同步提供商（严格校验避免重复提供商）
+      // 1. 同步提供商（统一判重口径避免重复提供商）
       const currentProviders = this.providerStore.getProviders();
       for (const prov of extracted.providers) {
-        const existIdx = currentProviders.findIndex((p) => this.providerStore.isProviderMatching(p, prov));
-        if (existIdx !== -1) {
-          const existing = currentProviders[existIdx];
-          const mergedModels = [...(existing.models || [])];
-          if (Array.isArray(prov.models)) {
-            for (const m of prov.models) {
-              const mIdx = mergedModels.findIndex((em) => em.id === m.id || (em.name && em.name === m.name));
-              if (mIdx !== -1) {
-                mergedModels[mIdx] = { ...mergedModels[mIdx], ...m };
-              } else {
-                mergedModels.push(m);
-              }
-            }
-          }
-          currentProviders[existIdx] = {
-            ...existing,
-            ...prov,
-            id: existing.id,
-            displayName: cleanRawProviderDisplayName(
-              existing.displayName || prov.displayName,
-              undefined,
-              mergedModels.map((m) => m.name || m.id)
-            ),
-            models: mergedModels,
-          };
-        } else {
-          currentProviders.push(prov);
-        }
+        this.providerStore.mergeProviderIntoList(currentProviders, prov, (existing, _prov, mergedModels) =>
+          cleanRawProviderDisplayName(
+            existing.displayName || _prov.displayName,
+            undefined,
+            mergedModels.map((m) => m.name || m.id)
+          )
+        );
       }
       this.providerStore.setProviders(currentProviders);
 
@@ -686,7 +662,7 @@ export class ApiSwitchCore {
 
       // 2. 导入/更新思源-编辑器 Profile
       if (extracted.editing && extracted.editing.model) {
-        const boundId = bindings["siyuan_builtin_editing"];
+        const boundId = bindings[SIYUAN_BUILTIN_EDITING];
         let exist = profiles.find((p) => (boundId && p.id === boundId) || p.name === "思源-编辑器");
         if (!exist) {
           const match = this.findMatchingProfile(extracted.editing);
@@ -708,7 +684,7 @@ export class ApiSwitchCore {
           if (extracted.editing.temperature !== undefined) exist.temperature = extracted.editing.temperature;
           if (extracted.editing.maxTokens !== undefined) exist.maxTokens = extracted.editing.maxTokens;
           if (extracted.editing.maxHistoryMessages !== undefined) exist.maxHistoryMessages = extracted.editing.maxHistoryMessages;
-          this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_EDITING, exist.id);
           reusedProfilesCount++;
         } else {
           exist = await this.addProfile({
@@ -725,15 +701,15 @@ export class ApiSwitchCore {
             maxHistoryMessages: extracted.editing.maxHistoryMessages,
             memo: "从思源笔记「设置-人工智能-编辑器」同步的配置",
           });
-          this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_EDITING, exist.id);
           createdProfilesCount++;
         }
       }
 
       // 3. 导入/更新思源-智能体 Profile（独立于编辑器，绝不吞并或复用编辑器 Profile）
       if (extracted.agent && extracted.agent.model) {
-        const editingId = bindings["siyuan_builtin_editing"];
-        const boundId = bindings["siyuan_builtin_agent"];
+        const editingId = bindings[SIYUAN_BUILTIN_EDITING];
+        const boundId = bindings[SIYUAN_BUILTIN_AGENT];
         let exist = profiles.find(
           (p) => (boundId && p.id === boundId && p.id !== editingId) || p.name === "思源-智能体"
         );
@@ -754,7 +730,7 @@ export class ApiSwitchCore {
           if (extracted.agent.streamIdleTimeout !== undefined) exist.streamIdleTimeout = extracted.agent.streamIdleTimeout;
           if (extracted.agent.confirmTimeout !== undefined) exist.confirmTimeout = extracted.agent.confirmTimeout;
           if (extracted.agent.maxRetries !== undefined) exist.maxRetries = extracted.agent.maxRetries;
-          this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_AGENT, exist.id);
           reusedProfilesCount++;
         } else {
           exist = await this.addProfile({
@@ -775,14 +751,14 @@ export class ApiSwitchCore {
             maxRetries: extracted.agent.maxRetries,
             memo: "从思源笔记「设置-人工智能-智能体」同步的配置",
           });
-          this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_AGENT, exist.id);
           createdProfilesCount++;
         }
       }
 
       // 4. 导入/更新思源-决策模型 Profile (Jev 模型)
       if (extracted.decision) {
-        const boundId = bindings["siyuan_builtin_decision"];
+        const boundId = bindings[SIYUAN_BUILTIN_DECISION];
         let exist = profiles.find((p) => (boundId && p.id === boundId) || p.name === "思源-决策模型" || (p.isDecisionModel && p.name.includes("决策")));
         if (exist) {
           exist.provider = "custom";
@@ -797,7 +773,7 @@ export class ApiSwitchCore {
             exist.requestTimeoutSeconds = extracted.decision.requestTimeoutSeconds;
           }
           exist.isDecisionModel = true;
-          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_DECISION, exist.id);
           reusedProfilesCount++;
         } else {
           exist = await this.addProfile({
@@ -812,7 +788,7 @@ export class ApiSwitchCore {
             isDecisionModel: true,
             memo: "从思源笔记「设置-人工智能-决策模型」同步的配置",
           });
-          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_DECISION, exist.id);
           createdProfilesCount++;
         }
       }
@@ -848,9 +824,9 @@ export class ApiSwitchCore {
     const bindings = this.bindingManager.getBindings();
 
     const scopeMap: Record<"editing" | "agent" | "decision", { pluginId: string; name: string }> = {
-      editing: { pluginId: "siyuan_builtin_editing", name: "编辑器" },
-      agent: { pluginId: "siyuan_builtin_agent", name: "智能体" },
-      decision: { pluginId: "siyuan_builtin_decision", name: "决策模型" },
+      editing: { pluginId: SIYUAN_BUILTIN_EDITING, name: "编辑器" },
+      agent: { pluginId: SIYUAN_BUILTIN_AGENT, name: "智能体" },
+      decision: { pluginId: SIYUAN_BUILTIN_DECISION, name: "决策模型" },
     };
 
     if (scope !== "all") {
@@ -915,14 +891,6 @@ export class ApiSwitchCore {
       skippedScopes,
       message: `已成功将生效接管的【${appliedNames}】写回思源笔记原生系统！${tip}`,
     };
-  }
-
-  // 兼容原有方法：写回生效接管的项
-  public async applyAllToSiyuan(): Promise<void> {
-    const res = await this.applyToSiyuan("all");
-    if (!res.success && res.appliedScopes.length === 0) {
-      throw new Error(res.message);
-    }
   }
 
   // ===================== 全量备份导入导出与智能去重 =====================
@@ -1031,7 +999,7 @@ export class ApiSwitchCore {
       if (!rawP || typeof rawP !== "object") continue;
       const originalId = rawP.id ? String(rawP.id) : "";
       const prov: ApiProvider = {
-        id: originalId || "provider_" + Math.random().toString(36).substring(2, 11),
+        id: originalId || genProviderId(),
         displayName: cleanRawProviderDisplayName(
           rawP.displayName || rawP.id || "未命名提供商",
           undefined,
@@ -1055,28 +1023,10 @@ export class ApiSwitchCore {
         providerUrl: rawP.providerUrl ? String(rawP.providerUrl) : "",
       };
 
-      // 判重规则：BaseURL+Key 或 displayName 相同，判定为重复提供商
-      const matchedIdx = currentProviders.findIndex((existing) => {
-        // 1. 本地同 ID
-        if (prov.id && existing.id && existing.id === prov.id) return true;
-        // 2. 名称相同且非空
-        if (
-          prov.displayName &&
-          existing.displayName &&
-          prov.displayName.trim().toLowerCase() === existing.displayName.trim().toLowerCase()
-        ) {
-          return true;
-        }
-        // 3. 核心连接参数相同（baseUrl + apiKey）
-        const exUrl = normalizeUrl(existing.baseUrl);
-        const tgtUrl = normalizeUrl(prov.baseUrl);
-        const exKey = normalizeString(existing.apiKey);
-        const tgtKey = normalizeString(prov.apiKey);
-        if (exUrl && tgtUrl && exUrl === tgtUrl && exKey === tgtKey) {
-          return true;
-        }
-        return false;
-      });
+      // 判重规则（与 ProviderStore 统一口径）：本地同 ID、displayName 忽略大小写、或 baseUrl+apiKey 且协议兼容
+      const matchedIdx = currentProviders.findIndex((existing) =>
+        this.providerStore.isProviderMatching(existing, prov)
+      );
 
       if (matchedIdx !== -1) {
         // 重复提供商：跳过新建，记录映射
@@ -1086,27 +1036,15 @@ export class ApiSwitchCore {
         }
         providersSkipped++;
 
-        // 增量补全已有提供商的模型池
-        const mergedModels = [...(existing.models || [])];
-        let modelsChanged = false;
-        if (Array.isArray(prov.models)) {
-          for (const m of prov.models) {
-            const mIdx = mergedModels.findIndex(
-              (em) => em.id === m.id || (em.name && em.name === m.name)
-            );
-            if (mIdx !== -1) {
-              // 模型已存在，如果本地缺失 contextLength 但导入项包含，则增量补齐容量
-              if (!mergedModels[mIdx].contextLength && m.contextLength) {
-                mergedModels[mIdx] = { ...mergedModels[mIdx], contextLength: m.contextLength };
-                modelsChanged = true;
-              }
-            } else {
-              mergedModels.push(m);
-              modelsChanged = true;
-              modelsMerged++;
-            }
-          }
+        // 增量补全已有提供商的模型池（仅回填缺失的 contextLength，不覆盖本地已有模型参数）
+        const beforeModels = existing.models || [];
+        const mergedModels = mergeProviderModels(beforeModels, prov.models, { backfillContextLengthOnly: true });
+        if (mergedModels.length !== beforeModels.length) {
+          modelsMerged += mergedModels.length - beforeModels.length;
         }
+        const modelsChanged =
+          mergedModels.length !== beforeModels.length ||
+          mergedModels.some((m, i) => m.contextLength !== beforeModels[i]?.contextLength);
         if (modelsChanged) {
           existing.models = mergedModels;
           currentProviders[matchedIdx] = existing;
@@ -1115,7 +1053,7 @@ export class ApiSwitchCore {
         // 不重复：添加新提供商，确保 ID 唯一
         let targetId = prov.id;
         while (currentProviders.some((p) => p.id === targetId)) {
-          targetId = "provider_" + Math.random().toString(36).substring(2, 11);
+          targetId = genProviderId();
         }
         prov.id = targetId;
         if (originalId) {
@@ -1156,7 +1094,7 @@ export class ApiSwitchCore {
       }
 
       const normalizedProf: ApiProfile = {
-        id: originalProfId || "prof_" + Math.random().toString(36).substring(2, 11),
+        id: originalProfId || genProfileId(),
         name: String(rawProf.name || rawProf.model || "未命名配置"),
         providerId: mappedProviderId,
         provider: String(rawProf.provider || "custom"),
@@ -1211,7 +1149,7 @@ export class ApiSwitchCore {
       // 不重复：确保 ID 唯一后添加
       let targetProfId = normalizedProf.id;
       while (currentProfiles.some((p) => p.id === targetProfId)) {
-        targetProfId = "prof_" + Math.random().toString(36).substring(2, 11);
+        targetProfId = genProfileId();
       }
       normalizedProf.id = targetProfId;
 
@@ -1269,7 +1207,7 @@ export class ApiSwitchCore {
       if (Array.isArray(realAi.providers)) {
         for (const rawP of realAi.providers) {
           const prov: ApiProvider = {
-            id: rawP.id || "provider_" + Math.random().toString(36).substring(2, 11),
+            id: rawP.id || genProviderId(),
             displayName: rawP.displayName || rawP.id || "未命名提供商",
             enabled: rawP.enabled ?? true,
             baseUrl: extractBaseUrl(rawP),
@@ -1287,30 +1225,7 @@ export class ApiSwitchCore {
                 }))
               : [],
           };
-          const existIdx = currentProviders.findIndex((p) => this.providerStore.isProviderMatching(p, prov));
-          if (existIdx !== -1) {
-            const existing = currentProviders[existIdx];
-            const mergedModels = [...(existing.models || [])];
-            if (Array.isArray(prov.models)) {
-              for (const m of prov.models) {
-                const mIdx = mergedModels.findIndex((em) => em.id === m.id || (em.name && em.name === m.name));
-                if (mIdx !== -1) {
-                  mergedModels[mIdx] = { ...mergedModels[mIdx], ...m };
-                } else {
-                  mergedModels.push(m);
-                }
-              }
-            }
-            currentProviders[existIdx] = {
-              ...existing,
-              ...prov,
-              id: existing.id,
-              displayName: existing.displayName || prov.displayName,
-              models: mergedModels,
-            };
-          } else {
-            currentProviders.push(prov);
-          }
+          this.providerStore.mergeProviderIntoList(currentProviders, prov, (existing, p) => existing.displayName || p.displayName);
           importedProviders++;
         }
         this.providerStore.setProviders(currentProviders);
@@ -1348,7 +1263,7 @@ export class ApiSwitchCore {
               memo: "从原生 ai.json 导入的编辑器配置",
             });
           }
-          this.bindingManager.setBinding("siyuan_builtin_editing", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_EDITING, exist.id);
         }
 
         if (realAi.agent && typeof realAi.agent === "object" && realAi.agent.modelId) {
@@ -1379,7 +1294,7 @@ export class ApiSwitchCore {
               memo: "从原生 ai.json 导入的智能体配置",
             });
           }
-          this.bindingManager.setBinding("siyuan_builtin_agent", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_AGENT, exist.id);
         }
 
         if (realAi.decision && typeof realAi.decision === "object") {
@@ -1406,7 +1321,7 @@ export class ApiSwitchCore {
               ...targetConf,
             });
           }
-          this.bindingManager.setBinding("siyuan_builtin_decision", exist.id);
+          this.bindingManager.setBinding(SIYUAN_BUILTIN_DECISION, exist.id);
         }
       }
 
@@ -1429,11 +1344,11 @@ export class ApiSwitchCore {
       this.bindingManager.notifyPluginUpdate(pluginId, config, slotId);
 
       const profile = this.profileStore.getProfile(profileId);
-      if (pluginId === "siyuan_builtin_editing") {
+      if (pluginId === SIYUAN_BUILTIN_EDITING) {
         await this.updateSiyuanSystemAi(profile, "editing");
-      } else if (pluginId === "siyuan_builtin_agent") {
+      } else if (pluginId === SIYUAN_BUILTIN_AGENT) {
         await this.updateSiyuanSystemAi(profile, "agent");
-      } else if (pluginId === "siyuan_builtin_decision") {
+      } else if (pluginId === SIYUAN_BUILTIN_DECISION) {
         await this.updateSiyuanSystemAi(profile, "decision");
       } else if (pluginId === "siyuan_builtin") {
         await this.updateSiyuanSystemAi(profile, "all");
@@ -1455,11 +1370,11 @@ export class ApiSwitchCore {
           this.bindingManager.notifyPluginUpdate(key, config);
 
           const profile = this.profileStore.getProfile(profileId);
-          if (key === "siyuan_builtin_editing") {
+          if (key === SIYUAN_BUILTIN_EDITING) {
             this.updateSiyuanSystemAi(profile, "editing");
-          } else if (key === "siyuan_builtin_agent") {
+          } else if (key === SIYUAN_BUILTIN_AGENT) {
             this.updateSiyuanSystemAi(profile, "agent");
-          } else if (key === "siyuan_builtin_decision") {
+          } else if (key === SIYUAN_BUILTIN_DECISION) {
             this.updateSiyuanSystemAi(profile, "decision");
           } else if (key === "siyuan_builtin") {
             this.updateSiyuanSystemAi(profile, "all");
@@ -1559,7 +1474,7 @@ export class ApiSwitchCore {
     } catch (e) {}
 
     // 1. 思源笔记 API - 编辑器
-    const editingBoundId = bindings["siyuan_builtin_editing"] || "";
+    const editingBoundId = bindings[SIYUAN_BUILTIN_EDITING] || "";
     let editingMatchedId: string | undefined = undefined;
     let editingMatchedName: string | undefined = undefined;
     if (!editingBoundId && extracted.editing) {
@@ -1570,7 +1485,7 @@ export class ApiSwitchCore {
       }
     }
     list.push({
-      pluginId: "siyuan_builtin_editing",
+      pluginId: SIYUAN_BUILTIN_EDITING,
       displayName: "思源笔记 API-编辑器",
       isBound: Boolean(editingBoundId),
       bindingState: Boolean(editingBoundId) ? "full" : "none",
@@ -1581,7 +1496,7 @@ export class ApiSwitchCore {
     });
 
     // 2. 思源笔记 API - 智能体
-    const agentBoundId = bindings["siyuan_builtin_agent"] || "";
+    const agentBoundId = bindings[SIYUAN_BUILTIN_AGENT] || "";
     let agentMatchedId: string | undefined = undefined;
     let agentMatchedName: string | undefined = undefined;
     if (!agentBoundId && extracted.agent) {
@@ -1592,7 +1507,7 @@ export class ApiSwitchCore {
       }
     }
     list.push({
-      pluginId: "siyuan_builtin_agent",
+      pluginId: SIYUAN_BUILTIN_AGENT,
       displayName: "思源笔记 API-智能体",
       isBound: Boolean(agentBoundId),
       bindingState: Boolean(agentBoundId) ? "full" : "none",
@@ -1603,7 +1518,7 @@ export class ApiSwitchCore {
     });
 
     // 3. 思源笔记 API - 决策模型
-    const decisionBoundId = bindings["siyuan_builtin_decision"] || "";
+    const decisionBoundId = bindings[SIYUAN_BUILTIN_DECISION] || "";
     let decisionMatchedId: string | undefined = undefined;
     let decisionMatchedName: string | undefined = undefined;
     if (!decisionBoundId && extracted.decision) {
@@ -1614,7 +1529,7 @@ export class ApiSwitchCore {
       }
     }
     list.push({
-      pluginId: "siyuan_builtin_decision",
+      pluginId: SIYUAN_BUILTIN_DECISION,
       displayName: "思源笔记 API-决策模型",
       isBound: Boolean(decisionBoundId),
       bindingState: Boolean(decisionBoundId) ? "full" : "none",
@@ -1766,9 +1681,9 @@ export class ApiSwitchCore {
     }
 
     const builtinIds = [
-      "siyuan_builtin_editing",
-      "siyuan_builtin_agent",
-      "siyuan_builtin_decision",
+      SIYUAN_BUILTIN_EDITING,
+      SIYUAN_BUILTIN_AGENT,
+      SIYUAN_BUILTIN_DECISION,
     ];
 
     for (const pluginId of builtinIds) {
@@ -1777,11 +1692,11 @@ export class ApiSwitchCore {
       this.bindingManager.notifyPluginUpdate(pluginId, config);
 
       const profile = this.profileStore.getProfile(profileId);
-      if (pluginId === "siyuan_builtin_editing") {
+      if (pluginId === SIYUAN_BUILTIN_EDITING) {
         await this.updateSiyuanSystemAi(profile, "editing");
-      } else if (pluginId === "siyuan_builtin_agent") {
+      } else if (pluginId === SIYUAN_BUILTIN_AGENT) {
         await this.updateSiyuanSystemAi(profile, "agent");
-      } else if (pluginId === "siyuan_builtin_decision") {
+      } else if (pluginId === SIYUAN_BUILTIN_DECISION) {
         await this.updateSiyuanSystemAi(profile, "decision");
       }
     }

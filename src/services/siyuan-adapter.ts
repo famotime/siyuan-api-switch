@@ -2,7 +2,7 @@ import { fetchSyncPost } from "siyuan";
 import { ApiProvider, ApiProviderModel, SiyuanAiJson } from "@/types";
 import { ApiProfile } from "./profile-store";
 import { normalizeAiProtocol } from "@/utils/protocol";
-import { findPresetByBaseUrl, PRESET_PROVIDERS } from "@/constants/providers";
+import { findPresetByBaseUrl, PRESET_PROVIDERS, SYSTEMONE_DECISION_ENDPOINT, SYSTEMONE_DECISION_DEFAULT_MODEL } from "@/constants/providers";
 
 export interface SiyuanExtractedAiInfo {
   providerId?: string;
@@ -331,6 +331,167 @@ export class SiyuanAdapter {
     return false;
   }
 
+  /**
+   * 决策模型 scope 写入。keepExistingName 对应批量路径的历史行为：effective.model 为空时优先保留存量 name；
+   * 单数路径则直接兜底默认模型名。
+   */
+  private applyDecisionScope(aiConfig: any, effective: ApiProfile, keepExistingName: boolean) {
+    if (!aiConfig.decision || typeof aiConfig.decision !== "object") {
+      aiConfig.decision = {};
+    }
+    aiConfig.decision.enabled = true;
+    aiConfig.decision.endpoint = effective.baseUrl || SYSTEMONE_DECISION_ENDPOINT;
+    aiConfig.decision.apiKey = effective.apiKey || "";
+    aiConfig.decision.name =
+      effective.model ||
+      (keepExistingName ? aiConfig.decision.name : undefined) ||
+      SYSTEMONE_DECISION_DEFAULT_MODEL;
+    if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
+      aiConfig.decision.timeout = effective.requestTimeoutSeconds;
+    }
+  }
+
+  /**
+   * 编辑器/智能体 scope 的提供商与模型 upsert：按 id/displayName 查找目标提供商（不存在则创建），
+   * 写入连接字段并确保目标模型及模型池存在，返回解析出的目标模型 id。
+   */
+  private upsertProviderAndModel(aiConfig: any, effective: ApiProfile, providers: ApiProvider[]): string {
+    const modelId = effective.model || "custom-model";
+    const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
+    const providerDisplayName = resolveProviderDisplayName(effective, providers);
+
+    let targetProvider = aiConfig.providers.find(
+      (p: any) =>
+        (p.id && p.id === providerId) ||
+        (providerDisplayName && p.displayName === providerDisplayName) ||
+        (effective.name && p.displayName === effective.name) ||
+        (providerDisplayName && p.displayName && p.displayName.startsWith(`${providerDisplayName}-`))
+    );
+
+    if (!targetProvider) {
+      targetProvider = {
+        id: providerId,
+        displayName: providerDisplayName,
+        enabled: true,
+        protocol: normalizeAiProtocol(effective.protocol || effective.provider),
+        models: [],
+      };
+      aiConfig.providers.push(targetProvider);
+    } else {
+      // 确保更新/修正提供商名称，防止历史脏数据（如带有 -model 后缀）残留
+      targetProvider.displayName = providerDisplayName;
+    }
+
+    targetProvider.enabled = true;
+    targetProvider.apiKey = effective.apiKey || "";
+    targetProvider.baseURL = effective.baseUrl || "";
+    targetProvider.baseUrl = effective.baseUrl || "";
+    if (effective.headers) {
+      targetProvider.headers = effective.headers;
+    }
+    if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
+      targetProvider.requestTimeout = effective.requestTimeoutSeconds;
+    }
+    // 协议值统一为内核原生值域（存量旧值 anthropic/gemini/custom 随接管一并修正）
+    targetProvider.protocol = normalizeAiProtocol(effective.protocol || effective.provider);
+
+    if (!Array.isArray(targetProvider.models)) {
+      targetProvider.models = [];
+    }
+
+    let targetModel = targetProvider.models.find((m: any) => m.id === modelId || m.name === modelId);
+    if (!targetModel) {
+      targetModel = {
+        id: modelId,
+        name: modelId,
+        displayName: modelId,
+        enabled: true,
+      };
+      targetProvider.models.push(targetModel);
+    } else {
+      targetModel.enabled = true;
+    }
+    // 写回已知的上下文容量（刷新/探测所得），内核 Agent 会用它做输入预算裁剪
+    if (effective.contextWindow && effective.contextWindow > 0) {
+      targetModel.contextLength = effective.contextWindow;
+    }
+
+    if (Array.isArray(effective.models)) {
+      for (const mName of effective.models) {
+        if (mName && !targetProvider.models.some((m: any) => m.id === mName || m.name === mName)) {
+          targetProvider.models.push({
+            id: mName,
+            name: mName,
+            displayName: mName,
+            enabled: true,
+          });
+        }
+      }
+    }
+
+    return targetModel.id || modelId;
+  }
+
+  /** 智能体 scope 参数写入（modelId + 8 个可选数值参数） */
+  private applyAgentParams(aiConfig: any, effective: ApiProfile, modelId: string) {
+    if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
+      aiConfig.agent = {};
+    }
+    aiConfig.agent.modelId = modelId;
+    if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
+      aiConfig.agent.temperature = effective.temperature;
+    }
+    if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
+      aiConfig.agent.maxCompletionTokens = effective.maxTokens;
+    }
+    if (effective.maxToolCallRounds !== undefined && !isNaN(effective.maxToolCallRounds)) {
+      aiConfig.agent.maxToolCallRounds = effective.maxToolCallRounds;
+    }
+    if (effective.sessionTimeout !== undefined && !isNaN(effective.sessionTimeout)) {
+      aiConfig.agent.sessionTimeout = effective.sessionTimeout;
+    }
+    if (effective.streamIdleTimeout !== undefined && !isNaN(effective.streamIdleTimeout)) {
+      aiConfig.agent.streamIdleTimeout = effective.streamIdleTimeout;
+    }
+    if (effective.confirmTimeout !== undefined && !isNaN(effective.confirmTimeout)) {
+      aiConfig.agent.confirmTimeout = effective.confirmTimeout;
+    }
+    if (effective.maxRetries !== undefined && !isNaN(effective.maxRetries)) {
+      aiConfig.agent.maxRetries = effective.maxRetries;
+    }
+  }
+
+  /** 编辑器 scope 参数写入（modelId + temperature/maxTokens/maxHistoryMessages） */
+  private applyEditingParams(aiConfig: any, effective: ApiProfile, modelId: string) {
+    if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
+      aiConfig.editing = {};
+    }
+    aiConfig.editing.modelId = modelId;
+    if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
+      aiConfig.editing.temperature = effective.temperature;
+    }
+    if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
+      aiConfig.editing.maxCompletionTokens = effective.maxTokens;
+    }
+    if (effective.maxHistoryMessages !== undefined && !isNaN(effective.maxHistoryMessages)) {
+      aiConfig.editing.maxHistoryMessages = effective.maxHistoryMessages;
+    }
+  }
+
+  /** 同步旧版兼容字段 openAI（内核旧设置界面的遗留读取入口） */
+  private syncLegacyOpenAi(aiConfig: any, effective: ApiProfile) {
+    const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
+    aiConfig.openAI = {
+      ...currentOpenAi,
+      apiBaseURL: effective.baseUrl,
+      apiKey: effective.apiKey,
+      apiModel: effective.model,
+      apiTimeout: effective.requestTimeoutSeconds ?? 30,
+      apiTemperature: effective.temperature ?? 0.7,
+      apiMaxTokens: effective.maxTokens ?? 4096,
+    };
+  }
+
   async updateSiyuanSystemAi(
     effective: ApiProfile | null,
     targetScope: "editing" | "agent" | "decision" | "all" = "all",
@@ -349,153 +510,24 @@ export class SiyuanAdapter {
 
         // 决策模型独立更新
         if (targetScope === "decision" || (targetScope === "all" && effective.isDecisionModel)) {
-          if (!aiConfig.decision || typeof aiConfig.decision !== "object") {
-            aiConfig.decision = {};
-          }
-          aiConfig.decision.enabled = true;
-          aiConfig.decision.endpoint = effective.baseUrl || "https://api.typesafe.ai/v1/systemone";
-          aiConfig.decision.apiKey = effective.apiKey || "";
-          aiConfig.decision.name = effective.model || "jev-latest";
-          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
-            aiConfig.decision.timeout = effective.requestTimeoutSeconds;
-          }
+          this.applyDecisionScope(aiConfig, effective, false);
         }
 
         // 编辑器与智能体：需要确保 Provider 存在
         if (targetScope === "editing" || targetScope === "agent" || targetScope === "all") {
-          const modelId = effective.model || "custom-model";
-          const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
-          const providerDisplayName = resolveProviderDisplayName(effective, providers);
-
-          let targetProvider = aiConfig.providers.find(
-            (p: any) =>
-              (p.id && p.id === providerId) ||
-              (providerDisplayName && p.displayName === providerDisplayName) ||
-              (effective.name && p.displayName === effective.name) ||
-              (providerDisplayName && p.displayName && p.displayName.startsWith(`${providerDisplayName}-`))
-          );
-
-          if (!targetProvider) {
-            targetProvider = {
-              id: providerId,
-              displayName: providerDisplayName,
-              enabled: true,
-              protocol: normalizeAiProtocol(effective.protocol || effective.provider),
-              models: [],
-            };
-            aiConfig.providers.push(targetProvider);
-          } else {
-            // 确保更新/修正提供商名称，防止历史脏数据（如带有 -model 后缀）残留
-            targetProvider.displayName = providerDisplayName;
-          }
-
-          targetProvider.enabled = true;
-          targetProvider.apiKey = effective.apiKey || "";
-          targetProvider.baseURL = effective.baseUrl || "";
-          targetProvider.baseUrl = effective.baseUrl || "";
-          if (effective.headers) {
-            targetProvider.headers = effective.headers;
-          }
-          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
-            targetProvider.requestTimeout = effective.requestTimeoutSeconds;
-          }
-          // 协议值统一为内核原生值域（存量旧值 anthropic/gemini/custom 随接管一并修正）
-          targetProvider.protocol = normalizeAiProtocol(effective.protocol || effective.provider);
-
-          if (!Array.isArray(targetProvider.models)) {
-            targetProvider.models = [];
-          }
-
-          let targetModel = targetProvider.models.find((m: any) => m.id === modelId || m.name === modelId);
-          if (!targetModel) {
-            targetModel = {
-              id: modelId,
-              name: modelId,
-              displayName: modelId,
-              enabled: true,
-            };
-            targetProvider.models.push(targetModel);
-          } else {
-            targetModel.enabled = true;
-          }
-          // 写回已知的上下文容量（刷新/探测所得），内核 Agent 会用它做输入预算裁剪
-          if (effective.contextWindow && effective.contextWindow > 0) {
-            targetModel.contextLength = effective.contextWindow;
-          }
-
-          if (Array.isArray(effective.models)) {
-            for (const mName of effective.models) {
-              if (mName && !targetProvider.models.some((m: any) => m.id === mName || m.name === mName)) {
-                targetProvider.models.push({
-                  id: mName,
-                  name: mName,
-                  displayName: mName,
-                  enabled: true,
-                });
-              }
-            }
-          }
-
-          const targetModelId = targetModel.id || modelId;
-
+          const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
           if (targetScope === "agent" || targetScope === "all") {
-            if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
-              aiConfig.agent = {};
-            }
-            aiConfig.agent.modelId = targetModelId;
-            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
-              aiConfig.agent.temperature = effective.temperature;
-            }
-            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
-              aiConfig.agent.maxCompletionTokens = effective.maxTokens;
-            }
-            if (effective.maxToolCallRounds !== undefined && !isNaN(effective.maxToolCallRounds)) {
-              aiConfig.agent.maxToolCallRounds = effective.maxToolCallRounds;
-            }
-            if (effective.sessionTimeout !== undefined && !isNaN(effective.sessionTimeout)) {
-              aiConfig.agent.sessionTimeout = effective.sessionTimeout;
-            }
-            if (effective.streamIdleTimeout !== undefined && !isNaN(effective.streamIdleTimeout)) {
-              aiConfig.agent.streamIdleTimeout = effective.streamIdleTimeout;
-            }
-            if (effective.confirmTimeout !== undefined && !isNaN(effective.confirmTimeout)) {
-              aiConfig.agent.confirmTimeout = effective.confirmTimeout;
-            }
-            if (effective.maxRetries !== undefined && !isNaN(effective.maxRetries)) {
-              aiConfig.agent.maxRetries = effective.maxRetries;
-            }
+            this.applyAgentParams(aiConfig, effective, targetModelId);
           }
-
           if (targetScope === "editing" || targetScope === "all") {
-            if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
-              aiConfig.editing = {};
-            }
-            aiConfig.editing.modelId = targetModelId;
-            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
-              aiConfig.editing.temperature = effective.temperature;
-            }
-            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
-              aiConfig.editing.maxCompletionTokens = effective.maxTokens;
-            }
-            if (effective.maxHistoryMessages !== undefined && !isNaN(effective.maxHistoryMessages)) {
-              aiConfig.editing.maxHistoryMessages = effective.maxHistoryMessages;
-            }
+            this.applyEditingParams(aiConfig, effective, targetModelId);
           }
         }
       }
 
       // 旧版兼容更新（仅在写回编辑器配置时更新原生 openAI 字段，不污染决策模型与智能体）
       if (targetScope === "editing" || (targetScope === "all" && !effective.isDecisionModel)) {
-        const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
-        aiConfig.openAI = {
-          ...currentOpenAi,
-          apiBaseURL: effective.baseUrl,
-          apiKey: effective.apiKey,
-          apiModel: effective.model,
-          apiTimeout: effective.requestTimeoutSeconds ?? 30,
-          apiTemperature: effective.temperature ?? 0.7,
-          apiMaxTokens: effective.maxTokens ?? 4096,
-        };
+        this.syncLegacyOpenAi(aiConfig, effective);
       }
 
       const success = await this.setSystemAiConfig(aiConfig);
@@ -537,146 +569,18 @@ export class SiyuanAdapter {
         if (!effective) continue;
 
         if (scope === "decision") {
-          if (!aiConfig.decision || typeof aiConfig.decision !== "object") {
-            aiConfig.decision = {};
-          }
-          aiConfig.decision.enabled = true;
-          aiConfig.decision.endpoint = effective.baseUrl || "https://api.typesafe.ai/v1/systemone";
-          aiConfig.decision.apiKey = effective.apiKey || "";
-          aiConfig.decision.name = effective.model || aiConfig.decision.name || "jev-latest";
-          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
-            aiConfig.decision.timeout = effective.requestTimeoutSeconds;
-          }
+          this.applyDecisionScope(aiConfig, effective, true);
         } else if (scope === "editing" || scope === "agent") {
-          const modelId = effective.model || "custom-model";
-          const providerId = effective.providerId || `provider_${effective.provider || "custom"}`;
-          const providerDisplayName = resolveProviderDisplayName(effective, providers);
-
-          let targetProvider = aiConfig.providers.find(
-            (p: any) =>
-              (p.id && p.id === providerId) ||
-              (providerDisplayName && p.displayName === providerDisplayName) ||
-              (effective.name && p.displayName === effective.name) ||
-              (providerDisplayName && p.displayName && p.displayName.startsWith(`${providerDisplayName}-`))
-          );
-
-          if (!targetProvider) {
-            targetProvider = {
-              id: providerId,
-              displayName: providerDisplayName,
-              enabled: true,
-              protocol: normalizeAiProtocol(effective.protocol || effective.provider),
-              models: [],
-            };
-            aiConfig.providers.push(targetProvider);
-          } else {
-            // 确保更新/修正提供商名称，防止历史脏数据（如带有 -model 后缀）残留
-            targetProvider.displayName = providerDisplayName;
-          }
-
-          targetProvider.enabled = true;
-          targetProvider.apiKey = effective.apiKey || "";
-          targetProvider.baseURL = effective.baseUrl || "";
-          targetProvider.baseUrl = effective.baseUrl || "";
-          if (effective.headers) {
-            targetProvider.headers = effective.headers;
-          }
-          if (effective.requestTimeoutSeconds !== undefined && !isNaN(effective.requestTimeoutSeconds)) {
-            targetProvider.requestTimeout = effective.requestTimeoutSeconds;
-          }
-          // 协议值统一为内核原生值域（存量旧值 anthropic/gemini/custom 随接管一并修正）
-          targetProvider.protocol = normalizeAiProtocol(effective.protocol || effective.provider);
-
-          if (!Array.isArray(targetProvider.models)) {
-            targetProvider.models = [];
-          }
-
-          let targetModel = targetProvider.models.find((m: any) => m.id === modelId || m.name === modelId);
-          if (!targetModel) {
-            targetModel = {
-              id: modelId,
-              name: modelId,
-              displayName: modelId,
-              enabled: true,
-            };
-            targetProvider.models.push(targetModel);
-          } else {
-            targetModel.enabled = true;
-          }
-          // 写回已知的上下文容量（刷新/探测所得），内核 Agent 会用它做输入预算裁剪
-          if (effective.contextWindow && effective.contextWindow > 0) {
-            targetModel.contextLength = effective.contextWindow;
-          }
-
-          if (Array.isArray(effective.models)) {
-            for (const mName of effective.models) {
-              if (mName && !targetProvider.models.some((m: any) => m.id === mName || m.name === mName)) {
-                targetProvider.models.push({
-                  id: mName,
-                  name: mName,
-                  displayName: mName,
-                  enabled: true,
-                });
-              }
-            }
-          }
-
-          const targetModelId = targetModel.id || modelId;
+          const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
 
           if (scope === "agent") {
-            if (!aiConfig.agent || typeof aiConfig.agent !== "object") {
-              aiConfig.agent = {};
-            }
-            aiConfig.agent.modelId = targetModelId;
-            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
-              aiConfig.agent.temperature = effective.temperature;
-            }
-            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
-              aiConfig.agent.maxCompletionTokens = effective.maxTokens;
-            }
-            if (effective.maxToolCallRounds !== undefined && !isNaN(effective.maxToolCallRounds)) {
-              aiConfig.agent.maxToolCallRounds = effective.maxToolCallRounds;
-            }
-            if (effective.sessionTimeout !== undefined && !isNaN(effective.sessionTimeout)) {
-              aiConfig.agent.sessionTimeout = effective.sessionTimeout;
-            }
-            if (effective.streamIdleTimeout !== undefined && !isNaN(effective.streamIdleTimeout)) {
-              aiConfig.agent.streamIdleTimeout = effective.streamIdleTimeout;
-            }
-            if (effective.confirmTimeout !== undefined && !isNaN(effective.confirmTimeout)) {
-              aiConfig.agent.confirmTimeout = effective.confirmTimeout;
-            }
-            if (effective.maxRetries !== undefined && !isNaN(effective.maxRetries)) {
-              aiConfig.agent.maxRetries = effective.maxRetries;
-            }
+            this.applyAgentParams(aiConfig, effective, targetModelId);
           }
 
           if (scope === "editing") {
-            if (!aiConfig.editing || typeof aiConfig.editing !== "object") {
-              aiConfig.editing = {};
-            }
-            aiConfig.editing.modelId = targetModelId;
-            if (effective.temperature !== undefined && !isNaN(effective.temperature)) {
-              aiConfig.editing.temperature = effective.temperature;
-            }
-            if (effective.maxTokens !== undefined && !isNaN(effective.maxTokens)) {
-              aiConfig.editing.maxCompletionTokens = effective.maxTokens;
-            }
-            if (effective.maxHistoryMessages !== undefined && !isNaN(effective.maxHistoryMessages)) {
-              aiConfig.editing.maxHistoryMessages = effective.maxHistoryMessages;
-            }
-
+            this.applyEditingParams(aiConfig, effective, targetModelId);
             // 同步旧版兼容字段 openAI
-            const currentOpenAi = aiConfig.openAI || (window as any).siyuan?.config?.ai?.openAI || {};
-            aiConfig.openAI = {
-              ...currentOpenAi,
-              apiBaseURL: effective.baseUrl,
-              apiKey: effective.apiKey,
-              apiModel: effective.model,
-              apiTimeout: effective.requestTimeoutSeconds ?? 30,
-              apiTemperature: effective.temperature ?? 0.7,
-              apiMaxTokens: effective.maxTokens ?? 4096,
-            };
+            this.syncLegacyOpenAi(aiConfig, effective);
           }
         }
       }

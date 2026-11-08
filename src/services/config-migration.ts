@@ -11,7 +11,7 @@
 import { ApiProvider, ApiProfile } from "@/types";
 import { normalizeAiProtocol } from "@/utils/protocol";
 import { LEGACY_GEMINI_BASE_URL, GEMINI_OPENAI_COMPAT_BASE_URL } from "@/constants/providers";
-import { normalizeUrl } from "./profile-store";
+import { normalizeUrl } from "@/utils/config-compare";
 
 function isLegacyGeminiUrl(url?: string): boolean {
   const normalized = normalizeUrl(url || "").toLowerCase();

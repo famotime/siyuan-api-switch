@@ -3,15 +3,16 @@ import {
 } from "siyuan";
 import { createApp } from 'vue'
 import App from './App.vue'
+import { DEBUG_SETTINGS_KEY } from "@/constants/debug"
 
 let plugin: Plugin | null = null
 export function usePlugin(pluginProps?: Plugin): Plugin {
-  if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('usePlugin', pluginProps, plugin); }
+  if (localStorage.getItem(DEBUG_SETTINGS_KEY) === "true") { console.log('usePlugin', pluginProps, plugin); }
   if (pluginProps) {
     plugin = pluginProps
   }
   if (!plugin && !pluginProps) {
-    if (localStorage.getItem("sy_api_switch_debug") === "true") { console.error('need bind plugin'); }
+    if (localStorage.getItem(DEBUG_SETTINGS_KEY) === "true") { console.error('need bind plugin'); }
   }
   return plugin!;
 }

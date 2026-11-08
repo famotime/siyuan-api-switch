@@ -528,9 +528,10 @@ export function resolveModelContextLength(modelName: string, apiContextLengths?:
 
 /** 指数上探阶梯（tokens）：4k → 16k → 64k → 256k → 1M */
 const PROBE_LADDER = [4096, 16384, 65536, 262144, 1048576];
-const DEFAULT_PROBE_MAX_REQUESTS = 8;
-const DEFAULT_PROBE_GRANULARITY = 1024;
-const DEFAULT_PROBE_TIMEOUT_MS = 60000;
+// 探测成本预算上限；ProviderEditPanel 的确认文案引用这三个导出常量，改值即自动同步文案
+export const DEFAULT_PROBE_MAX_REQUESTS = 8;
+export const DEFAULT_PROBE_GRANULARITY = 1024;
+export const DEFAULT_PROBE_TIMEOUT_MS = 60000;
 
 /** 填充文本按「中文约 0.5 token/字」保守估算并上浮 20%，确保实际 tokens ≥ 目标值 */
 const FILLER_SENTENCE = "这是一段用于探测模型上下文窗口长度的中性填充内容，不包含任何指令。";

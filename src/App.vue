@@ -331,6 +331,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiSwitchCore, ApiProfile, RegisteredPluginInfo, extractSiyuanAiSettings, PRESET_PROVIDERS, PRESET_PROVIDER_LIST, AutoProviderResult } from "@/services/api-switch-core"
 import { ApiProvider, ApiProviderModel } from "@/types"
 import { lookupModelContextLength } from "@/constants/model-contexts"
+import { DEBUG_SETTINGS_KEY } from "@/constants/debug"
 import { computeDefaultProfileName } from "@/utils/profile-naming"
 import { showMessage } from "siyuan"
 import { useWindowDrag } from "@/composables/useWindowDrag"
@@ -340,7 +341,7 @@ import PluginBindingsPanel from "@/components/PluginBindingsPanel.vue"
 import ProviderPresetPicker from "@/components/ProviderPresetPicker.vue"
 
 // 调试日志开关
-const STORAGE_KEY_DEBUG = "sy_api_switch_debug"
+const STORAGE_KEY_DEBUG = DEBUG_SETTINGS_KEY
 const enableDebugLog = ref(localStorage.getItem(STORAGE_KEY_DEBUG) === "true")
 const saveLogSetting = () => {
   localStorage.setItem(STORAGE_KEY_DEBUG, enableDebugLog.value ? "true" : "false")
@@ -1001,9 +1002,6 @@ const exportBackupAction = () => {
     }
   })
 }
-
-// 保持别名兼容
-const exportProfiles = exportBackupAction
 
 const syncFromSiyuanAction = async () => {
   handleSafeNavigate(async () => {

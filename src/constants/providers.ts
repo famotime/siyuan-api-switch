@@ -26,6 +26,10 @@ export interface PresetProviderInfo {
 export const LEGACY_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const GEMINI_OPENAI_COMPAT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
 
+// 思源内核 Jev 决策模型的官方端点与默认模型名（写回 ai.json、解析与读档兜底共用）
+export const SYSTEMONE_DECISION_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+export const SYSTEMONE_DECISION_DEFAULT_MODEL = "jev-latest";
+
 const PRESET_PROVIDER_ORDER: PresetProviderInfo[] = [
   {
     id: "openai",

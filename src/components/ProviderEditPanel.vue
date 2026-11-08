@@ -207,7 +207,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, onUnmounted } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
+import { useSavedFeedback } from "@/composables/useSavedFeedback";
+import { useDirtySnapshot } from "@/composables/useDirtySnapshot";
 import { showMessage } from "siyuan";
 import { ApiProvider, ApiProviderModel, AiProtocol } from "@/types";
 import { getPresetProtocolBaseUrl } from "@/constants/providers";
@@ -220,6 +222,9 @@ import {
   resolveModelContextLength,
   formatContextLength,
   estimateProbeWorstCost,
+  DEFAULT_PROBE_MAX_REQUESTS,
+  DEFAULT_PROBE_GRANULARITY,
+  DEFAULT_PROBE_TIMEOUT_MS,
 } from "@/services/provider-probe";
 
 const props = defineProps<{
@@ -249,43 +254,13 @@ const actionMessage = ref("");
 const actionOk = ref<boolean | null>(null);
 const probeConfirm = ref<{ show: boolean; text: string }>({ show: false, text: "" });
 
-// 保存成功轻量提示反馈
-const isSaved = ref(false);
-let savedTimer: any = null;
-
-const showSavedFeedback = () => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-  isSaved.value = true;
-  savedTimer = setTimeout(() => {
-    isSaved.value = false;
-    savedTimer = null;
-  }, 1800);
-};
-
-const clearSavedFeedback = () => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-  isSaved.value = false;
-};
-
-onUnmounted(() => {
-  if (savedTimer) {
-    clearTimeout(savedTimer);
-    savedTimer = null;
-  }
-});
+// 保存反馈与脏检查快照（共享 composable，defineExpose 契约不变）
+const { isSaved, showSavedFeedback, clearSavedFeedback } = useSavedFeedback();
 
 const setActionMessage = (text: string, ok: boolean | null) => {
   actionMessage.value = text;
   actionOk.value = ok;
 };
-
-const initialSnapshot = ref("");
 
 const getNormalizedCurrentData = (): ApiProvider => {
   let parsedHeaders: Record<string, string> = {};
@@ -304,14 +279,7 @@ const getNormalizedCurrentData = (): ApiProvider => {
   };
 };
 
-const updateInitialSnapshot = () => {
-  initialSnapshot.value = JSON.stringify(getNormalizedCurrentData());
-};
-
-const isDirty = () => {
-  if (!initialSnapshot.value) return false;
-  return JSON.stringify(getNormalizedCurrentData()) !== initialSnapshot.value;
-};
+const { updateInitialSnapshot, isDirty } = useDirtySnapshot(() => JSON.stringify(getNormalizedCurrentData()));
 
 const resetDirty = () => {
   updateInitialSnapshot();
@@ -511,7 +479,7 @@ const confirmProbe = () => {
     show: true,
     text:
       `即将对模型「${selectedModelName.value}」进行主动探测：从 4k tokens 起指数上探、触顶后二分逼进，` +
-      `最多 ${8} 次真实请求、单次超时 60s，粒度 1k tokens。\n` +
+      `最多 ${DEFAULT_PROBE_MAX_REQUESTS} 次真实请求、单次超时 ${DEFAULT_PROBE_TIMEOUT_MS / 1000}s，粒度 ${formatContextLength(DEFAULT_PROBE_GRANULARITY)} tokens。\n` +
       `每次请求都会真实消耗输入 tokens（最坏情况约 ${formatContextLength(estimateProbeWorstCost())} 输入 tokens，实际取决于模型上限，通常远小于此）。` +
       `探测结果将写入该模型的容量徽标（随「保存提供商」落盘）。是否继续？`,
   };

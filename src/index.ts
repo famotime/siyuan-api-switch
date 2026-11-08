@@ -5,20 +5,13 @@ import {
 import "@/index.scss";
 import PluginInfoString from '@/../plugin.json'
 import { destroy, init } from '@/main'
-import { apiSwitchCore } from "@/services/api-switch-core";
+import { apiSwitchCore, STORAGE_KEY } from "@/services/api-switch-core";
+import { DEBUG_SETTINGS_KEY } from "@/constants/debug";
 import { SyFrontendTypes } from "@/types";
 
-let PluginInfo = {
-  version: '',
-}
-try {
-  PluginInfo = PluginInfoString
-} catch (err) {
-  if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('Plugin info parse error: ', err); }
-}
 const {
   version,
-} = PluginInfo
+} = PluginInfoString
 
 export default class ApiSwitchPlugin extends Plugin {
   // Run as mobile
@@ -52,7 +45,7 @@ export default class ApiSwitchPlugin extends Plugin {
       this.isElectron = false
     }
 
-    if (localStorage.getItem("sy_api_switch_debug") === "true") { console.log('Plugin loaded, the plugin is ', this); }
+    if (localStorage.getItem(DEBUG_SETTINGS_KEY) === "true") { console.log('Plugin loaded, the plugin is ', this); }
 
     // 初始化 API 旋钮核心
     await apiSwitchCore.initialize(this);
@@ -76,7 +69,7 @@ export default class ApiSwitchPlugin extends Plugin {
   }
 
   uninstall() {
-    this.removeData("config.json");
+    this.removeData(STORAGE_KEY);
   }
 
   openSetting() {

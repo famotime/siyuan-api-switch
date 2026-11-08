@@ -35,7 +35,3 @@ export function normalizeAiProtocol(raw?: string | null): AiProtocol {
   const val = (raw || "").trim().toLowerCase();
   return LEGACY_PROTOCOL_MAP[val] || "openai";
 }
-
-export function isNativeProtocol(raw?: string | null): boolean {
-  return NATIVE_PROTOCOLS.includes((raw || "").trim().toLowerCase() as AiProtocol);
-}

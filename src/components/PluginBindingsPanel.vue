@@ -95,7 +95,7 @@
 
         <div v-if="!plugin.isBound && plugin.localConfig && (plugin.localConfig.baseUrl || plugin.localConfig.apiKey || plugin.localConfig.model)" class="local-config-import-card animate-fade-in" style="margin-bottom: 16px;">
           <div class="import-card-title">
-            💡 检测到该{{ plugin.pluginId.startsWith('siyuan_builtin') ? '系统模块' : '插件' }}已有配置与高级参数
+            💡 检测到该{{ plugin.pluginId.startsWith(SIYUAN_BUILTIN_PREFIX) ? '系统模块' : '插件' }}已有配置与高级参数
           </div>
           <div class="import-card-desc" style="margin-top: 6px; line-height: 1.6;">
             <div>基础参数：服务商 <strong>{{ getProviderName(plugin.localConfig.provider) }}</strong> | 模型 <strong>{{ plugin.localConfig.model || '未指定' }}</strong> | 地址 <code>{{ plugin.localConfig.baseUrl || '无' }}</code></div>
@@ -145,6 +145,7 @@
 
 <script setup lang="ts">
 import { RegisteredPluginInfo, ApiProfile } from "@/services/api-switch-core";
+import { SIYUAN_BUILTIN_PREFIX } from "@/constants/siyuan-scopes";
 
 defineProps<{
   plugin: RegisteredPluginInfo;
