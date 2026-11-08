@@ -1,6 +1,6 @@
 {
   "name": "siyuan-api-switch",
-  "version": "0.10.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Unified AI API switch for SiYuan plugins.",
   "author": "Quincy Zou",
