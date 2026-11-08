@@ -1,420 +1,202 @@
 # 思源笔记 API 旋钮 (siyuan-api-switch)
 
-思源笔记 API 旋钮是一款旨在帮助用户集中化管理、无缝切换、多端共享 AI 服务 API 配置，并能深度双向联动思源笔记原生 AI 引擎的全局配置中枢插件。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)  [![SiYuan Plugin](https://img.shields.io/badge/SiYuan-Plugin-green.svg)](https://github.com/siyuan-note/siyuan) [![TypeScript](https://img.shields.io/badge/Language-TypeScript-blue.svg)](https://www.typescriptlang.org/) [![Vue 3](https://img.shields.io/badge/Framework-Vue%203-brightgreen.svg)](https://vuejs.org/)
+
+> 一键接管 API 配置，多插件无缝调用。
+
+**思源笔记 API 旋钮** 是一款专为重度 AI 笔记用户打造的**全局统一 AI 配置与调度中枢插件**。
+
+只需在此配置一次，即可同时接管**思源笔记原生 AI 场景**（快速改写、对话智能体、决策模型）以及**生态内全部兼容 AI 插件**，彻底终结多插件间密钥反复复制、参数碎片化、换设备配置丢失等诸多痛点，实现一处维护、全局生效、无感轮转。
 
 ---
 
-## 💡 为什么需要 API 旋钮？
+## 💡 痛点直击：为什么需要「API 旋钮」？
 
-思源笔记生态中有大量优秀的 AI 辅助插件，同时思源笔记本体也在「设置 - 人工智能」中内置了强大的 AI 引擎（包含快捷编辑器改写、智能体对话、决策模型等）。
+在思源笔记中，随着安装的 AI 辅助插件（如 Muse 写作助手、文档助手、脉络镜等）逐渐增多，您是否遇到过以下烦恼？
 
-然而在过去，配置 AI 服务面临诸多痛点：
-- **割裂繁琐**：每个插件都要单独填写 Base URL、API Key、模型名称；更换密钥或模型时需要在多处逐个修改。
-- **与思源本体脱节**：思源原生配置了一套 API 提供商与模型，第三方插件却无法直接复用，造成配置重复与管理混乱。
-- **网关与定制头受限**：部分中转服务（如 OpenRouter、One API 或自建内网网关）需要特定 Header 鉴权或区分协议，传统插件难以统一支持。
-- **多模型任务配置困难**：部分高级插件同时需要「主对话模型」与「意图判别/决策模型」，单一套配置无法满足精细化分工。
-
-**“API 旋钮”正是为了彻底终结上述痛点而打造的全局统一配置中枢（Hub）**。只需在此统一配置，即可同时接管思源原生 AI 场景与所有兼容插件，实现一处更新、全局生效、丝滑轮转。
-
----
-
-## ✨ 核心特性
-
-### 1. 统一顶栏入口与层次化架构 (Providers + Profiles)
-- 🌟 **顶栏快捷入口**：思源笔记顶部工具栏新增专属旋钮图标，随时随地一键唤出或关闭统一配置中心，告别多层设置菜单寻址。
-- **底层 API 提供商 (Providers)**：
-  - 统一维护模型底座供应商账号（从预置目录一键添加，或自定义网关）。
-  - 集中配置 Base URL、API Key、通信协议（思源内核原生值域 `openai` / `openai-responses` / `anthropic-messages`，及 Jev 决策模型扩展协议 `systemone`）、超时时间、**自定义 HTTP Headers** 及支持的模型清单。
-- **上层场景配置 (Profiles)**：
-  - **继承机制**：Profile 可直接下拉关联已配置的提供商，自动继承其通信参数与密钥，并直接从模型池中点选模型；
-  - **独立定制**：亦可脱离提供商，单独设置定制化的 Base URL、Key、温度与 Token 限制；
-  - **决策模型通用标识**：支持将 Profile 标记为决策判别模型，专用于意图分类与轻量决策场景；
-  - **智能默认命名**：新建配置默认按「供应商-模型」自动生成名称，手动输入后锁定防覆盖；保存时名称为空（或编辑中原名称被删空）自动回退默认命名，不阻断保存；
-  - **未保存改动保护**：提供商或配置存在未保存改动时，切换面板或关闭弹窗会弹出【保存】与【放弃】确认提示，防止误丢配置。
-- ⚡ **合法预设配置自动生成与关联 Provider**：
-  - 新建或编辑 Profile 时，若选择了主流预设服务商（DeepSeek、Gemini、SiliconFlow、OpenAI 等）或输入有效 Base URL，系统将**自动识别并智能生成/匹配底层的 API 提供商**，并补全官方端点与推荐模型池，无需反复跨面板手动创建 Provider。
-  - 创建 Profile 未填 Base URL 时，系统会自动补齐官方预设地址并提供轻量反馈。
-
-### 2. 思源笔记原生 4 大场景深度自动联动
-深度打通思源笔记内核，实现对思源「设置 - 人工智能」的原生接管：
-- **API 提供商 (Providers)**：完整同步思源原生配置的提供商与可用模型列表。
-- **思源 - 编辑器 (Editing)**：接管思源笔记内置的快捷 AI 改写、补全与内容生成。
-- **思源 - 智能体 (Agent)**：接管思源原生的对话智能体与多轮 Agent 助手。
-- **思源 - 决策模型 (Decision)**：接管思源内核用于自动化路由分类的决策判别模型。
-- **双向无感联动与增量写回**：
-  - 🔄 **「从思源读取」**：一键从思源内核拉取最新的原生提供商与场景配置；内置内核级 AES 密文解密（`siyuan-crypto`）与多变命名 API Key 提取，原生 Jev 决策模型与第三方模型端点精准解析。
-  - ⚡ **静默自动联动写回**：在接管面板中为思源原生场景切换绑定或调整参数后，系统自动静默精准写回思源内核，无需手动点击写回按钮与确认弹窗。
-  - 🛡️ **安全隔离与合并**：增量写回仅同步已接管的场景项，安全合并底层 Provider，绝不污染或覆盖思源原生未接管的配置与原生 `openAI` 设置。
-  - 🧹 **提供商名称净化**：读取与写回思源配置时自动清洗提供商名称中误混入的模型后缀，保持内核侧名称为纯粹提供商名。
-  - 🧩 **编辑器与智能体解耦**：思源-编辑器与思源-智能体解耦为独立 Profile，各自参数与模型独立调优、互不影响。
-
-### 3. 多模型槽位协议（Multi-Slot Protocol）与生态接管
-- **多模型槽位协议**：突破单一插件只能绑定一个模型的局限，全面支持子插件注册多模型槽位（如「主对话模型」与「决策分类模型」独立接管）。
-- **槽位级独立展示与接管**：接管面板按插件卡片内的槽位清晰陈列，各槽位支持独立绑定不同 Profile、独立本地配置解析与独立通知广播。
-- **接管状态三态模型**：插件按槽位绑定情况实时呈现 `full 全部接管` / `partial 部分接管` / `none 独立配置` 三态——左侧导航徽章与右侧状态卡片联动（部分接管展示琥珀橙 Badge 与「已接管 (X/Y)」槽位计数），接管列表免点击直接显示当前生效模型，悬浮查看完整配置。
-- **一键分发接管 5 大插件生态**：自动发现并接管全局注册的兼容插件（Muse 写作助手、文档助手、脉络镜、无界画布、时间统计）。
-- **零输入一键导入**：检测到插件本地原有配置时，提供一键提取导入为旋钮 Profile 并立即完成绑定。
-- **统一请求增强**：下发配置全面携带自定义 `headers` 与 `protocol`，确保所有插件在面对复杂中转网关时稳定通信。
-- **置灰反馈**：子插件在被接管后，原生面板自动提示当前由 API 旋钮接管并显示 Profile 名称，配置输入框自动防误改置灰。
-
-### 4. 配置提取智能去重与防重复生成 (Smart Deduplication)
-- 提取思源原生配置或子插件本地配置时，内置多维一致性比对与评分算法（Base URL 归一化、协议兼容判定、Key 比对、模型匹配等）。
-- 优先复用已有相同配置并自动绑定，合并已有 Provider 模型列表，彻底避免重复同步导致生成大量同名冗余项。
-
-### 5. 完全对齐思源原生 `ai.json` 的统一导入与导出
-- 导出文件严格遵循思源笔记 `ai.json` 标准格式：
-  - 包含 `providers`, `editing`, `agent`, `decision` 4 大思源原生配置根节点，思源本体可直接无损读取。
-  - 附带 `_siyuanApiSwitch` 扩展元数据，完整记录 Profile 配置池及全部子插件各槽位的接管绑定状态。
-- 跨设备迁移时一键导入，配置池与接管绑定关系 100% 完整复原。
-- 完美向下兼容旧版纯 Profile 数组格式的 JSON 文件。
-
-### 6. 优雅的降级保护
-- 全局解耦设计：若未安装或停用 API 旋钮插件，所有子插件将完全无感地继续使用其自身独立的本地配置，绝不影响日常使用。
-
-### 7. 供应商预置目录与在线探测（刷新可用模型 / 测试链接 / 容量探测 / 决策模型独立探测）
-- 📇 **预置供应商目录**：与思源笔记原生「设置 → AI → 供应商」完全一致的 17 家服务商预置（OpenAI、Anthropic、DeepSeek、Moonshot/Kimi、MiniMax 国际/国内、阿里百炼国际/国内、火山方舟、智谱 GLM、Gemini、Mistral、SiliconFlow、OpenRouter、Groq、Ollama、LM Studio）+ 自定义模板。点侧栏「+」即可从目录一键创建，预置自带协议感知 BaseURL（如 DeepSeek 的 Anthropic Messages 入口）与推荐模型池，填 Key 即用。
-- 🔄 **刷新可用模型**：调用思源内核 `/api/ai/listModels` 拉取服务商 `/v1/models` 真实清单，合并去重回填（不删除手动添加的模型）；请求全部由内核 Go 进程转发，无任何 CORS 问题（需思源 v3.7.0+）。
-- 🔌 **两级测试链接**：一级「测试链接」验证地址/密钥/网络连通（不消耗 tokens）；二级「深度测试」对选中模型发一条 `max_tokens=1` 的真实对话请求（消耗少量 tokens），验证模型名、余额与端到端可用性。
-- 🧠 **决策模型 (System One / Jev) 独立探测**：针对 `systemone` 协议（及地址包含 `/systemone` 的决策端点）建立独立探测与刷新通道，彻底解耦内核硬编码的 `/v1/models` 与 `/v1/chat/completions`——一级连通性测试经内核代理发送轻量 Schema 探针，利用服务端 422 校验机制在 0 Token 消耗下验证 Base URL、API Key 与模型合法性；二级深度测试发送极简结构化决策请求，实时回显时延、Token 消耗与决策概率；「刷新可用模型」自动嗅探多协议聚合网关的决策模型清单，非网关服务商安全回退为推荐模型池。
-- 📏 **模型上下文容量探测**：三级来源——服务商 `/v1/models` 元数据 > 内置快照目录（约 100 条主流模型，数据整理自公开 OpenRouter / models.dev 目录）> 主动探测（4k 起指数上探 + 二分逼进，最多 8 次请求、粒度 1k、单次超时 60s，探测前弹窗确认预计消耗）。容量以徽标常显于模型标签（如 `128k`），持久化到提供商配置，接管写回时同步至思源内核（内核 Agent 按其做输入预算裁剪），并经 `SharedConfig.contextWindow` 下发给子插件。
-- 🔁 **协议值域自动迁移**：存量配置中的旧协议值（`gemini` / `anthropic` / `custom`）读档时静默迁移为思源内核原生值域，并自动改写 Gemini 旧原生端点为其 OpenAI 兼容端点，修复旧版 anthropic 协议实际失效的隐患。
+| 痛点场景 | 没有 API 旋钮时 😫 | 使用「API 旋钮」之后 ✨ |
+| :--- | :--- | :--- |
+| **多插件配置繁琐** | 每一个插件都要逐个手动填写 Base URL、API Key、模型名称，重复枯燥且极易出错。 | **一处配置，全局共享**：在旋钮中配置一次服务商，其他插件一键下拉选用，免除重复输入。 |
+| **切换服务商/更换密钥** | 某个 API 额度用完或想切换服务商（如 DeepSeek 换为 SiliconFlow），必须逐个进入所有插件逐一修改。 | **全局联动，毫秒生效**：在旋钮中调整一次参数或重新绑定，已接管插件与思源原生即时生效。 |
+| **与思源原生脱节** | 思源笔记自带 AI 与第三方插件各用各的配置，无法相互复用，造成配置割裂与混乱。 | **深度双向联动**：原生支持思源 AI 配置一键读取与静默写回，参数独立调优互不影响。 |
+| **多任务插件分工难** | 高级插件往往需要「长文对话模型」与「轻量意图分类模型」分工合作，单一配置面板无法满足。 | **多模型槽位精细接管**：插件内各槽位独立绑定不同模型，清晰展示「部分接管」进度与状态。 |
+| **换机/备份困难** | 换新设备或重新安装笔记时，所有插件的 API 秘钥与参数全需重新配置一遍，费时费力。 | **全量资产一键备份**：纯净 JSON 一键导出，换电脑一键导入秒级还原，自带智能去重与模型合并。 |
+| **模型信息不明** | 记不清具体的模型代号、不知道网络连通与否、不知道模型究竟支持多长上下文。 | **官方清单一键刷新**：服务商可用模型自动拉取，0 消耗连通性测试，模型上下文容量常显。 |
 
 ---
 
-## 📦 已适配接管的插件与原生场景
+## 🎯 核心使用场景与用户价值
+
+### 场景一：集中化统一管理，一键接管多插件生态
+- **层次化管理，结构清晰**：
+  - **底层 API 提供商 (Providers)**：统一维护您的模型厂商账号（如 DeepSeek、OpenAI、SiliconFlow 或自建网关），集中配置 API Key、Base URL、自定义请求头等基础参数。
+  - **上层场景配置 (Profiles)**：可直接关联已配置的服务商，自动继承其密钥与通信参数，只需从模型池中点选具体模型，即可组装出专属的任务配置。
+- **一键分发与接管**：
+  - 自动发现所有已安装的兼容插件，在接管面板中点击即可将任意 Profile 绑定至目标插件。
+  - 绑定后，子插件原生设置面板中的输入框会自动置灰并展示接管提示，防止误改误填；退出接管后无缝回退为子插件本地配置，零侵入无残留。
+- **配置信息免点击直显**：
+  - 左侧接管列表中直接显示各插件当前实际生效的模型名称，鼠标轻悬即可快速预览完整的接入参数与自定义设置。
+
+---
+
+### 场景二：深度联动思源原生 4 大 AI 场景，双向无感同步
+真正打通思源笔记 3.8.x+ 内核级原生 AI，消除插件与笔记本体之间的壁垒：
+- **完整接管思源原生 AI 矩阵**：
+  - 📝 **思源 - 编辑器 (Editing)**：接管思源笔记内置的快捷 AI 改写、续写与文字润色场景。
+  - 🤖 **思源 - 智能体 (Agent)**：接管思源原生的对话智能体与多轮 Agent 助手。
+  - 🧠 **思源 - 决策模型 (Decision)**：接管思源内核用于自动化任务路由与意图分类的轻量决策模型。
+  - 🏢 **思源 - 服务商池 (Providers)**：完整同步思源原生配置的服务商与模型列表。
+- **「从思源读取」**：
+  - 一键从思源内核导入最新的原生服务商与场景配置；内置内核级 AES 密文安全解密，精准解析存量密钥与模型端点。
+- **静默自动联动写回**：
+  - 在接管面板中为思源场景切换绑定或调整高级参数（温度、上下文条数、超时等）后，系统自动静默保存并精准写回内核，无需手动点击写回按钮与确认弹窗。
+- **安全隔离与名称净化**：
+  - 增量写回仅同步已接管的场景项，安全合并底层 Provider，绝不污染思源未接管的原生配置；读取与写回时自动净化存量服务商名称，杜绝模型后缀混入。
+
+---
+
+### 场景三：主流服务商预置目录，开箱即用与官网直达
+- **镜像思源原生 17+ 家主流服务商预置**：
+  - 涵盖 DeepSeek、OpenAI、Anthropic、Moonshot (Kimi)、MiniMax、阿里百炼、火山方舟、智谱 GLM、Google Gemini、Mistral、SiliconFlow、OpenRouter、Groq、Ollama、LM Studio 等服务商及自定义模板。
+  - 侧栏「+」号一键添加预置服务商，自动预填官方最优端点与推荐模型池，只需填入 API Key 即可使用。
+- **官网与控制台一键直达**：
+  - 提供商面板支持快捷跳转官方网站或 API 控制台；预置服务商自动填入控制台直达网址，网址缺少协议前缀时自动补全，找 Key、查余额、读文档一步到位。
+  - 场景配置自动继承关联服务商的官网地址，方便在配置场景时随时查阅厂商信息。
+- **免密与本地模型配置支持**：
+  - 放宽 API Key 必填校验，允许留空保存；针对 Ollama、LM Studio 等本地运行的离线模型或免鉴权反向代理服务，无需输入多余密钥即可直接保存与测试连接。
+
+---
+
+### 场景四：智能模型管理与真实连通性测试（省钱又省心）
+- **一键刷新可用模型**：
+  - 提供商面板新增「刷新可用模型」按钮，调用思源内核直接向服务商拉取最新的 `/v1/models` 真实模型清单，告别手动查文档敲模型名容易拼错的烦恼。
+  - 结果智能合并去重，不覆盖您手动添加的专属模型；模型列表为空时自动选中首个可用模型。
+- **两级可用性测试通道**：
+  - 🔌 **一级「测试链接」**：验证 Base URL、API Key 与网络链路连通性（不消耗 Tokens），即时显示网络时延与可用模型数量。
+  - 🎯 **二级「深度测试」**：向选中模型发送极简真实对话请求（消耗极少量 Tokens），验证模型名称、账户余额与端到端实际可用性。
+- **模型上下文容量常显**：
+  - 自动识别并展示模型的上下文窗口大小（如 `128k`、`32k`、`8k`）；接管写回时同步下发至思源内核与各子插件，帮助大模型根据输入预算科学裁剪历史上下文，避免超长爆 Token。
+
+---
+
+### 场景五：多槽位精细化调度与 Jev 决策模型专属支持
+- **多模型槽位协议 (Multi-Slot Protocol)**：
+  - 满足高级复杂插件的精细化分工需求。例如某些创作插件需要一个高质量的「主对话模型」负责长文写作，同时需要一个快速轻量的「决策分类模型」负责后台打标与意图识别。
+  - 旋钮接管面板按插件卡片内的各个槽位清晰呈现，支持针对具体槽位分别独立指定不同的模型配置。
+- **支持「部分接管」三态模型**：
+  - 插件按槽位绑定状态实时呈现 `全部接管` / `部分接管` / `独立配置` 三态。
+  - 当插件仅接管了部分槽位时，左侧导航展示醒目的琥珀橙 Badge，右侧面板顶部联动呈现「部分槽位已接管 (X/Y)」卡片与进度提示，一目了然。
+- **Jev 决策模型 (TypeSafe System One) 专属支持**：
+  - 协议列表新增「TypeSafe System One (Jev 决策模型)」原生支持，专用于意图识别与轻量决策场景。
+  - 建立决策模型专属连通性通道：支持零 Token 消耗的轻量快速连通测试，以及实时回显时延与推理结果的深度测试；支持智能刷新聚合网关下的决策模型清单。
+
+---
+
+### 场景六：全量资产备份、跨设备迁移与智能去重
+- **右上角统一全量备份与迁移**：
+  - 顶栏右上角常驻醒目的「导入」「导出」操作入口，支持将所有服务商账号与场景配置一键打包为纯净 JSON 备份文件，换电脑或多设备同步秒级还原。
+- **智能识别去重与模型增量合并 (Smart Deduplication)**：
+  - 导入新配置或提取插件本地配置时，内置多维判重算法；
+  - 自动识别已存在的相同服务商与配置，绝不产生同名重复垃圾数据；
+  - 针对已存在的服务商，智能增量补齐备份中包含的新模型，已有配置自动重新映射关联，安全可靠。
+- **全格式兼容导入**：
+  - 不仅支持插件自身的全量备份文件，还能直接向下兼容导入思源笔记原生 `ai.json`、历史带扩展备份及旧版纯 Profile 数组，自动平滑识别转换。
+
+---
+
+## 📦 已适配与接管的生态矩阵
 
 | 目标应用 / 插件 | 场景说明 | 接管支持状态 |
 | :--- | :--- | :---: |
-| **思源笔记 - 编辑器** | 思源原生快捷 AI 改写与内容续写 | ✅ 原生增量自动联动 |
-| **思源笔记 - 智能体** | 思源原生多轮对话智能体与 Agent | ✅ 原生增量自动联动 |
-| **思源笔记 - 决策模型** | 思源内核意图路由与分类判别 | ✅ 原生增量自动联动 |
-| [**siyuan-muse (Muse 写作助手)**](https://github.com/famotime/siyuan-muse) | 智能长文撰写、卡片激发与交互式创作 | ✅ 全功能多槽位接管 |
-| [**siyuan-doc-assist (文档助手)**](https://github.com/famotime/siyuan-doc-assist) | AI 智能摘要、好标题生成、段落翻译、废话标记、图片 OCR | ✅ 全功能接管 |
-| [**siyuan-network-lens (脉络镜)**](https://github.com/famotime/siyuan-network-lens) | LLM Wiki 维护生成、知识网脉络分析、Wiki 对话问答 | ✅ 全功能接管 |
-| [**siyuan-canvas (无界画布)**](https://github.com/famotime/siyuan-canvas) | 白板思维导图关联节点 AI 探索下钻与卡片生成 | ✅ 全功能接管 |
-| [**siyuan-time-spent (时间统计)**](https://github.com/famotime/siyuan-time-spent) | 时间日志 AI 智能总结与目标复盘 | ✅ 全功能接管 |
+| **思源笔记 - 编辑器** | 思源原生快捷 AI 改写、续写与文字润色 | ✅ 原生增量自动联动 |
+| **思源笔记 - 智能体** | 思源原生多轮对话智能体与 Agent 助手 | ✅ 原生增量自动联动 |
+| **思源笔记 - 决策模型** | 思源内核意图路由与轻量自动化分类决策 | ✅ 原生增量自动联动 |
+| [**siyuan-muse (Muse 写作助手)**](https://github.com/famotime/siyuan-muse) | 智能长文撰写、卡片激发与交互式长篇创作 | ✅ 全功能一键接管 |
+| [**siyuan-doc-assist (文档助手)**](https://github.com/famotime/siyuan-doc-assist) | AI 智能摘要、好标题生成、段落翻译、图片 OCR | ✅ 全功能一键接管 |
+| [**siyuan-network-lens (脉络镜)**](https://github.com/famotime/siyuan-network-lens) | LLM Wiki 自动生成、知识脉络分析、Wiki 问答 | ✅ 全功能一键接管 |
+| [**siyuan-canvas (无界)**](https://github.com/famotime/siyuan-canvas) | 白板思维导图关联节点 AI 探索下钻与卡片生成 | ✅ 全功能一键接管 |
+| [**siyuan-time-spent (源时记)**](https://github.com/famotime/siyuan-time-spent) | 时间日志 AI 智能总结与目标复盘反思 | ✅ 全功能一键接管 |
+| [siyuan-mate(灵犀)](https://github.com/famotime/siyuan-mate) | 住在你笔记里的知识伴侣 | ✅ 多槽位模型接管 |
+
+> 🛡️ **优雅的降级保护机制**：
+> 本插件采用全局解耦设计。若未安装、停用或卸载本插件，所有子插件将完全无感地继续使用其自身独立的本地设置，绝不影响您的日常笔记与 AI 使用。
 
 ---
 
-## 🛠️ 第三方插件接入协议 (开发者指南)
+## 🚀 快速上手使用指引
 
-作为思源笔记插件开发者，您只需在子插件中加入极简的同步逻辑，即可支持通过 API 旋钮 进行统一配置管理与多模型槽位接管。
+只需简单的 3 步，即可轻松享受统一配置的便利：
 
-### 1. 协议核心数据结构
-
-#### 1.1 `SharedConfig`（旋钮下发的只读共享配置）
-
-```typescript
-export interface SharedConfig {
-  /** 绑定的 Profile 唯一标识 */
-  profileId: string;
-  /** Profile 显示名称，如 "DeepSeek-V3 默认" */
-  profileName: string;
-  /** 服务商标识，如 "deepseek", "openai", "siliconflow", "custom" 等 */
-  provider: string;
-  /** API 基础 URL，如 "https://api.deepseek.com/v1" */
-  baseUrl: string;
-  /** API Key / 鉴权密钥 */
-  apiKey: string;
-  /** 当前选中的主模型名称，如 "deepseek-chat" */
-  model: string;
-  /** 候选模型列表（可选） */
-  models?: string[];
-  /** 通信协议（可选）：思源内核原生值 "openai" | "openai-responses" | "anthropic-messages"，及 Jev 决策模型扩展协议 "systemone" */
-  protocol?: string;
-  /** 当前模型上下文窗口容量 tokens（可选，来自 /v1/models 元数据或内置目录/主动探测） */
-  contextWindow?: number;
-  /** 请求超时时间（秒，可选） */
-  requestTimeoutSeconds?: number;
-  /** 采样温度 (0.0 - 2.0，可选) */
-  temperature?: number;
-  /** 最大输出 Token 数（可选） */
-  maxTokens?: number;
-  /** 自定义 HTTP Headers 字典（可选，如中转网关特定鉴权头） */
-  headers?: Record<string, string>;
-  /** 思源编辑器与智能体高级参数全量合集（可选，为空不下发） */
-  maxHistoryMessages?: number;  // 编辑器：最大上下文数
-  maxToolCallRounds?: number;   // 智能体：最大工具调用轮数
-  sessionTimeout?: number;      // 智能体：会话超时时间
-  streamIdleTimeout?: number;   // 智能体：流空闲超时时间
-  confirmTimeout?: number;      // 智能体：确认超时时间
-  maxRetries?: number;          // 智能体：最大重试次数
-  /** 是否为分类决策模型（可选） */
-  isDecisionModel?: boolean;
-  /** Profile 备注说明（可选） */
-  memo?: string;
-  /** 服务商官网地址（可选） */
-  providerUrl?: string;
-}
+```mermaid
+flowchart LR
+    Step1["① 点击顶栏图标<br/>唤出配置面板"] --> Step2["② 添加服务商<br/>填入 Key 并测试"]
+    Step2 --> Step3["③ 在接管面板中<br/>为插件/场景一键绑定"]
+    Step3 --> Done["🎉 即刻生效<br/>全局随心轮转"]
 ```
 
-#### 1.2 `PluginSlotDefinition` 与 `RegisterPluginOptions`（多槽位协议定义）
-
-```typescript
-export interface PluginSlotDefinition {
-  /** 槽位唯一标识，例如 "chat" | "decision" */
-  id: string;
-  /** 槽位显示名称，例如 "对话模型" | "决策模型" */
-  name: string;
-  /** 槽位详细说明（可选） */
-  description?: string;
-  /** 槽位本地降级配置快照（可选，用于一键导入） */
-  localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
-}
-
-export interface RegisterPluginOptions {
-  pluginId: string;
-  displayName: string;
-  callback: (config: SharedConfig | null, slotId?: string) => void;
-  slots?: PluginSlotDefinition[];
-  localConfig?: Omit<SharedConfig, "profileId" | "profileName">;
-}
-```
-
-#### 1.3 `SiyuanApiSwitch` 全局服务接口
-
-```typescript
-export interface SiyuanApiSwitch {
-  version: string;
-  /**
-   * 注册子插件（支持对象式配置或多参数重载）
-   */
-  register(
-    pluginIdOrOptions: string | RegisterPluginOptions,
-    displayName?: string,
-    callback?: (config: SharedConfig | null, slotId?: string) => void,
-    localConfig?: Omit<SharedConfig, "profileId" | "profileName">,
-    options?: { slots?: PluginSlotDefinition[] }
-  ): void;
-  /** 取消注册 */
-  unregister(pluginId: string): void;
-  /** 获取指定插件或槽位当前绑定的配置 */
-  getBoundConfig(pluginId: string, slotId?: string): SharedConfig | null;
-  /** 子插件主动请求解除托管某个槽位或整插件接管 */
-  unbind(pluginId: string, slotId?: string): Promise<void>;
-  /** 子插件上报最新的本地配置，用于 API 旋钮面板实时检测与匹配 */
-  updateLocalConfig(
-    pluginId: string,
-    localConfig: Omit<SharedConfig, "profileId" | "profileName">,
-    slotId?: string
-  ): void;
-}
-```
+1. **唤出配置中心**：安装插件后，思源笔记顶部工具栏会出现专属的旋钮图标，点击即可唤出配置面板。
+2. **添加 AI 服务商**：
+   - 切换到「API 提供商」面板，点击左侧「+」号。
+   - 从丰富的预置服务商目录（如 DeepSeek、SiliconFlow 等）中选择所需厂商，填入您的 API Key（若是本地 Ollama / LM Studio 可留空免填）。
+   - 点击「测试链接」或「深度测试」验证可用性，点击「保存」。
+3. **分配接管场景**：
+   - 切换到「接管配置」面板，您可以看到已安装的生态插件以及思源笔记原生场景。
+   - 在目标插件或槽位下方点击下拉菜单，直接选择刚才添加的服务商与模型。
+   - 配置即刻生效，无需重启思源笔记！
 
 ---
 
-### 2. 初始化时注册并监听
+## ❓ 常见问题 (FAQ)
 
-#### 模式 A：极简单模型接入（适用于单一 AI 任务插件）
+<details>
+<summary><b>Q1: 停用或卸载 API 旋钮插件后，我的插件设置会失效吗？</b></summary>
+完全不会。所有兼容插件在接入时均保留了各自独立的本地配置存储。如果 API 旋钮未运行，子插件会自动降级回退至其本地原生配置面板，就像您从未安装过旋钮一样，没有任何副作用。
+</details>
 
-在子插件的 `onload` 生命周期中注册，在回调中接收旋钮下发的配置：
+<details>
+<summary><b>Q2: 我使用的是自建的 One API / New API 中转网关或本地 Ollama，支持吗？</b></summary>
+全面支持。
+- **本地模型（Ollama / LM Studio）**：在预置目录中直接选 Ollama 或 LM Studio，API Key 允许留空保存，直接连通本地端点。
+- **第三方聚合网关**：可选择「自定义」或任意 OpenAI 兼容模板，自由填写自定义 Base URL，并可在「自定义请求头」中按需添加特殊的鉴权 Header。
+</details>
 
-```typescript
-// 插件内保存的接管配置
-private managedAiConfig: SharedConfig | null = null;
+<details>
+<summary><b>Q3: 点击「测试链接」会消耗我的 API 额度吗？</b></summary>
+- **一级「测试链接」**：通过向服务商端点拉取模型列表来验证地址可达性与密钥有效性，**完全不消耗 Tokens**。
+- **二级「深度测试」**：通过发送极简测试文本验证端到端生成能力，仅消耗极少量 Tokens（通常少于几个 Tokens）。
+- **Jev 决策模型测试**：一级探针同样为 **0 Token 消耗**。
+</details>
 
-private initApiSwitchSync() {
-  const sync = (shared: SharedConfig | null) => {
-    if (shared) {
-      // 1. 进入接管状态：将旋钮下发的 SharedConfig 保存并覆盖本地请求参数
-      this.managedAiConfig = {
-        ...shared,
-        requestTimeoutSeconds: shared.requestTimeoutSeconds ?? 60,
-        temperature: shared.temperature ?? 0.7,
-        maxTokens: shared.maxTokens ?? 4096,
-      };
-    } else {
-      // 2. 退出接管状态：还原为插件原生的本地配置
-      this.managedAiConfig = null;
-    }
+<details>
+<summary><b>Q4: 我换了一台电脑，怎么把所有配置快速迁移过去？</b></summary>
+在旧电脑上打开 API 旋钮，点击右上角的「导出」按钮，保存为 JSON 资产文件。在新电脑上点击右上角的「导入」按钮选中该文件即可秒级还原所有服务商与配置，系统还会自动去重，杜绝产生垃圾数据。
+</details>
 
-    // 3. 通知插件设置面板重新渲染（置灰或解禁输入项）
-    if (this.setting) {
-      (this.setting as any).updateManagedConfig?.(this.managedAiConfig);
-    }
-  };
-
-  // 4. 提取当前插件已有的本地配置快照，供旋钮做一键导入迁移
-  const localConfig = {
-    provider: "custom",
-    baseUrl: this.config.baseUrl,
-    apiKey: this.config.apiKey,
-    model: this.config.model,
-    requestTimeoutSeconds: this.config.requestTimeoutSeconds,
-    temperature: this.config.temperature,
-    maxTokens: this.config.maxTokens,
-  };
-
-  const register = () => {
-    window.siyuanApiSwitch?.register(this.name, this.displayName, sync, localConfig);
-  };
-
-  if (window.siyuanApiSwitch) {
-    register();
-  } else {
-    // 兼容思源笔记并行加载插件时，旋钮晚于当前插件加载完成的情况
-    window.addEventListener("siyuan-api-switch:ready", register, { once: true });
-  }
-}
-```
-
-#### 模式 B：多模型槽位接入（适用于同时具备对话与决策/意图识别的复合插件）
-
-```typescript
-// 区分管理不同槽位的生效配置
-private managedSlotsConfig: Record<string, SharedConfig | null> = {
-  chat: null,
-  decision: null,
-};
-
-private initMultiSlotSync() {
-  const syncSlot = (shared: SharedConfig | null, slotId?: string) => {
-    const key = slotId || "chat";
-    this.managedSlotsConfig[key] = shared;
-
-    // 通知设置界面更新对应槽位的置灰状态与输入框显示
-    this.setting?.refreshSlotUi?.(key, shared);
-  };
-
-  const options: RegisterPluginOptions = {
-    pluginId: this.name,
-    displayName: this.displayName,
-    callback: syncSlot,
-    slots: [
-      {
-        id: "chat",
-        name: "对话生成模型",
-        description: "用于长文续写、多轮对话与卡片内容生成",
-        localConfig: {
-          provider: "custom",
-          baseUrl: this.config.chatBaseUrl,
-          apiKey: this.config.chatApiKey,
-          model: this.config.chatModel,
-        },
-      },
-      {
-        id: "decision",
-        name: "意图分类模型",
-        description: "用于轻量意图识别、路由决策与关键词打标",
-        localConfig: {
-          provider: "custom",
-          baseUrl: this.config.decisionBaseUrl,
-          apiKey: this.config.decisionApiKey,
-          model: this.config.decisionModel,
-        },
-      },
-    ],
-  };
-
-  const register = () => {
-    window.siyuanApiSwitch?.register(options);
-  };
-
-  if (window.siyuanApiSwitch) {
-    register();
-  } else {
-    window.addEventListener("siyuan-api-switch:ready", register, { once: true });
-  }
-}
-```
+<details>
+<summary><b>Q5: 为什么子插件设置面板里的某些输入框变成了灰色无法编辑？</b></summary>
+这代表该插件当前正由「API 旋钮」集中接管！输入框上方会清晰展示接管提示与生效的 Profile 名称。置灰是为了防止误改导致配置不一致。如需退出接管，只需在旋钮的接管面板中将该插件设为「独立配置」即可重新开放输入。
+</details>
 
 ---
 
-### 3. 在 API 请求中合并自定义 Headers
+## 🛠️ 第三方插件接入 (开发者指南)
 
-发起大模型请求（无论是 `fetch` 还是思源内核 `forwardProxy`）时，务必合并 `config.headers`：
+如果您是思源笔记插件开发者，希望让您的 AI 插件也支持被 API 旋钮集中接管（或实现多模型槽位分配），接入过程极其轻量，只需几行代码即可完成双向联动。
 
-```typescript
-// 以 fetch 为例，优先读取被接管的配置
-const activeConfig = this.managedAiConfig || this.localConfig;
-
-const response = await fetch(`${activeConfig.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${activeConfig.apiKey}`,
-    ...(activeConfig.headers || {}), // 合并旋钮下发的自定义请求头（如中转网关鉴权）
-  },
-  body: JSON.stringify({
-    model: activeConfig.model,
-    messages,
-    temperature: activeConfig.temperature,
-    max_tokens: activeConfig.maxTokens,
-  }),
-});
-```
-
-### 4. 卸载时注销与主动解绑
-
-在子插件的 `onunload` 中注销以清理监听：
-
-```typescript
-onunload() {
-  if (window.siyuanApiSwitch) {
-    window.siyuanApiSwitch.unregister(this.name);
-  }
-}
-```
-
-此外还可在运行期主动请求解除接管（如用户在插件内关闭「使用统一 AI 配置」开关时）：
-
-```typescript
-// 解除整插件托管，或指定槽位：await window.siyuanApiSwitch.unbind(this.name, "decision");
-await window.siyuanApiSwitch.unbind(this.name);
-
-// 插件本地配置变化时上报最新快照，供旋钮面板实时检测与一键导入匹配
-window.siyuanApiSwitch.updateLocalConfig(this.name, {
-  provider: "custom",
-  baseUrl: this.config.baseUrl,
-  apiKey: this.config.apiKey,
-  model: this.config.model,
-});
-```
+详细的协议定义、多槽位配置范例、请求头合并规范与降级处理指南，请直接查阅：
+- 📖 [**第三方插件接入协议与集成指南**](docs/API_SWITCH_INTEGRATION_GUIDE.md)
+- 💻 [**多槽位接入标准参考实现 (TypeScript)**](docs/sample-plugin-integration.ts)
+- 🏛️ [**项目分层架构与目录说明**](docs/project-structure.md)
 
 ---
 
-## 📱 平台兼容性
+## 📱 平台支持
 
-- **桌面端 / 浏览器端 (Desktop / Web)**：深度适配，功能完全支持。
-- **移动端 (Mobile)**：目前以桌面端与平板为主。移动端可在无旋钮接管时无缝使用子插件原生配置，建议在桌面端完成全局 Profiles 管理与分配。
-
----
-
-## 💻 工程开发与测试
-
-本项目采用 Vue 3 + TypeScript 构建，分层服务架构并配备完整的 Vitest 自动化单元测试套件：
-
-```bash
-# 启动单元测试套件 (11 大测试模块，113 个用例秒级全绿验证)
-npm test
-
-# 执行 TypeScript 静态类型检查
-npx tsc --noEmit
-
-# 生产环境构建打包 (输出 dist/ 及 package.zip)
-npm run build
-
-# 持续增量监听开发
-npm run dev
-```
-
-### 自动化测试覆盖范围
-
-- 🔌 **多模型槽位接管与通知广播** ([`binding-manager.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/binding-manager.test.ts))：槽位隔离注册、复合键持久化、槽位独立绑定与实时通知分发、full/partial/none 三态流转、多槽位解绑时顶层历史键隔离清理与删除配置解绑补全
-- 🛡️ **智能去重与防重复生成** ([`deduplicate-config.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/deduplicate-config.test.ts))：URL 与协议归一化、Profile / Provider 多维评分比对算法（含决策模型与 API Key 严格一致性）、空密钥 Profile 防盲目复用与配置自动复用
-- ⚡ **合法预设配置自动生成 Provider** ([`auto-generate-provider.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/auto-generate-provider.test.ts))：预设服务商智能创建、官方默认端点补齐、推荐模型池扩充与冗余字段清理
-- 🔐 **思源内核 AES 密文解密与增量写回** ([`siyuan-sync-and-decision.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/siyuan-sync-and-decision.test.ts))：原生 Key 密文解密、编辑器与智能体独立解耦同步、已接管项精准增量写回、未接管项安全保护与提供商名称净化纠偏
-- 📐 **参数继承与有效 Profile 计算** ([`effective-profile.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/effective-profile.test.ts))：提供商参数级联继承、独立覆盖与优先级决策
-- 📦 **思源原生 `ai.json` 导入导出** ([`import-export.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/import-export.test.ts)、[`extract-siyuan-ai.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/extract-siyuan-ai.test.ts))：4 大原生根节点规范对齐、扩展元数据无损嵌入、旧版兼容转换与存量提供商名称模型后缀剥离
-- 🔄 **供应商探测：刷新模型/两级测试/容量探测** ([`provider-probe.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/provider-probe.test.ts))：内核端点草稿请求形态、上下文超限判定、指数上探+二分算法预算控制、硬错误立即中止、容量三级查询优先级，以及 System One (Jev) 决策模型 0-Token Schema 探针、深度决策测试与聚合网关模型嗅探刷新
-- 📇 **预置目录与协议值域迁移** ([`protocol-and-presets.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/protocol-and-presets.test.ts))：镜像原生 18 项目录完整性、协议感知地址切换、旧协议值与 Gemini 旧端点静默迁移、决策模型 custom 标记保留与 `systemone` 协议规范化
-- 📏 **上下文容量全链路** ([`context-length.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/context-length.test.ts))：Profile/Provider 容量继承与覆盖、`SharedConfig.contextWindow` 下发、写回思源时同步 `contextLength` 与原生协议值
-- 🏷️ **配置默认命名与生命周期** ([`profile-naming.test.ts`](file:///d:/MyCodingProjects/siyuan-api-switch/tests/unit/profile-naming.test.ts))：「供应商-模型」默认命名联动、手动命名锁定防覆盖、空名称保存兜底自动回退与存量读档命名纠偏
-
-详细模块职责与分层设计请参阅 [docs/project-structure.md](docs/project-structure.md)。
+- **桌面端 / 浏览器端 (Desktop / Web)**：深度适配，完全支持所有功能。
+- **移动端 (Mobile)**：目前以桌面端大屏交互为主。移动端在无旋钮接管时无缝使用各插件原生独立配置；建议在桌面端完成全局服务商维护与分发。
 
 ---
 
 ## 📄 开源许可证
 
-本项目基于 [MIT 许可证](LICENSE) 开源。
+本项目基于 [MIT 许可证](LICENSE) 开源，欢迎社区朋友共同参与贡献与反馈！
