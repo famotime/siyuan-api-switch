@@ -33,11 +33,11 @@
         <div class="form-group col-6">
           <div class="label-with-link">
             <label>{{ t('aiProvider') }}</label>
-            <a v-if="localProfile.providerUrl" href="javascript:void(0)" @click.prevent="openProviderUrl(localProfile.providerUrl)" class="provider-link-btn" :data-tooltip="t('getApiKeyTooltip')" data-tooltip-position="bottom">
+            <a v-if="displayedProviderUrl" href="javascript:void(0)" @click.prevent="openProviderUrl(displayedProviderUrl)" class="provider-link-btn" :data-tooltip="t('getApiKeyTooltip')" data-tooltip-position="bottom">
               <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" style="fill:none!important"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             </a>
           </div>
-          <input v-if="localProfile.providerId" type="text" class="b3-text-field" :value="localProfile.provider" disabled />
+          <input v-if="localProfile.providerId" type="text" class="b3-text-field" :value="linkedProvider?.protocol || localProfile.provider" disabled />
           <select v-else class="b3-select" v-model="localProfile.provider" @change="onProviderChange">
             <option v-for="preset in presetOptions" :key="preset.id" :value="preset.id">{{ preset.displayName }}</option>
             <option value="custom">{{ t('customProvider') }}</option>
@@ -47,17 +47,26 @@
 
       <div class="form-group">
         <label>{{ t('baseUrl') }}</label>
-        <input type="text" class="b3-text-field" v-model="localProfile.baseUrl" :disabled="Boolean(localProfile.providerId)" placeholder="https://api.example.com/v1" />
+        <input v-if="localProfile.providerId" type="text" class="b3-text-field" :value="displayedBaseUrl" disabled placeholder="https://api.example.com/v1" />
+        <input v-else type="text" class="b3-text-field" v-model="localProfile.baseUrl" placeholder="https://api.example.com/v1" />
       </div>
 
       <div class="form-group">
         <label>{{ t('apiKeyRequired') }}</label>
         <div class="input-password-wrapper">
+          <input
+            v-if="localProfile.providerId"
+            :type="showApiKey ? 'text' : 'password'"
+            class="b3-text-field"
+            :value="displayedApiKey"
+            disabled
+            placeholder="sk-..."
+          />
           <input 
+            v-else
             :type="showApiKey ? 'text' : 'password'" 
             class="b3-text-field" 
             v-model="localProfile.apiKey" 
-            :disabled="Boolean(localProfile.providerId)"
             placeholder="sk-..." 
           />
           <button class="toggle-password-btn" @click="showApiKey = !showApiKey" type="button" :data-tooltip="showApiKey ? t('hideApiKey') : t('showApiKey')" data-tooltip-position="left">
@@ -341,12 +350,18 @@ defineExpose({
   clearSavedFeedback,
 });
 
+const linkedProvider = computed(() => {
+  if (!localProfile.value.providerId) return null;
+  return props.providers.find((p) => p.id === localProfile.value.providerId) || null;
+});
+
+const displayedBaseUrl = computed(() => localProfile.value.baseUrl || linkedProvider.value?.baseUrl || "");
+const displayedApiKey = computed(() => localProfile.value.apiKey || linkedProvider.value?.apiKey || "");
+const displayedProviderUrl = computed(() => localProfile.value.providerUrl || linkedProvider.value?.providerUrl || "");
+
 const currentAvailableModels = computed(() => {
-  if (localProfile.value.providerId) {
-    const prov = props.providers.find((p) => p.id === localProfile.value.providerId);
-    if (prov && prov.models && prov.models.length > 0) {
-      return prov.models.map((m) => m.displayName || m.name || m.id);
-    }
+  if (linkedProvider.value && linkedProvider.value.models && linkedProvider.value.models.length > 0) {
+    return linkedProvider.value.models.map((m) => m.displayName || m.name || m.id);
   }
   return localProfile.value.models && localProfile.value.models.length > 0
     ? localProfile.value.models
@@ -358,8 +373,11 @@ const onProfileProviderSelect = () => {
     const prov = props.providers.find((p) => p.id === localProfile.value.providerId);
     if (prov) {
       localProfile.value.provider = prov.protocol || "custom";
-      localProfile.value.baseUrl = prov.baseUrl;
-      localProfile.value.apiKey = prov.apiKey;
+      localProfile.value.protocol = prov.protocol || "openai";
+      // 清空 Profile 自身连接覆盖字段，确保后续修改 Provider 时能动态继承最新 URL 与 Key
+      localProfile.value.baseUrl = "";
+      localProfile.value.apiKey = "";
+      localProfile.value.providerUrl = "";
       if (prov.models && prov.models.length > 0) {
         localProfile.value.models = prov.models.map((m) => m.displayName || m.name || m.id);
         if (!localProfile.value.models.includes(localProfile.value.model)) {

@@ -70,6 +70,9 @@ export class ApiSwitchCore {
   private profileStore: ProfileStore;
   private bindingManager: PluginBindingManager;
   private siyuanAdapter: SiyuanAdapter;
+  // 持久化合并写锁：同一时间仅允许一个 saveData 在途，期间新触发的 save() 会合并为下一轮最新快照写入
+  private saveInFlight: Promise<void> | null = null;
+  private savePending = false;
 
   // ref 方式通知 UI 更新
   public onStateChange: (() => void) | null = null;
@@ -199,7 +202,8 @@ export class ApiSwitchCore {
           this.providerStore.getProviders(),
           this.profileStore.getProfiles()
         );
-        if (migrated || providersChanged) {
+        const pruned = this.pruneDanglingBindings();
+        if (migrated || providersChanged || pruned) {
           await this.save();
         }
       } else {
@@ -215,21 +219,60 @@ export class ApiSwitchCore {
     }
   }
 
+  /**
+   * 清理悬空绑定（目标 profileId 已不存在的无效绑定键），避免界面展示「已接管」但实际返回 null。
+   */
+  private pruneDanglingBindings(): boolean {
+    const validIds = new Set(this.profileStore.getProfiles().map((p) => p.id));
+    const bindings = this.bindingManager.getBindings();
+    let changed = false;
+    for (const key of Object.keys(bindings)) {
+      const targetId = bindings[key];
+      if (!targetId || !validIds.has(targetId)) {
+        delete bindings[key];
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  private parseBindingKey(key: string): { pluginId: string; slotId?: string } {
+    const idx = key.lastIndexOf(":");
+    if (idx > 0 && idx < key.length - 1) {
+      return { pluginId: key.slice(0, idx), slotId: key.slice(idx + 1) };
+    }
+    return { pluginId: key };
+  }
+
   async save() {
     if (!this.plugin) return;
-    try {
-      const data: ApiSwitchStorage = {
-        providers: this.providerStore.getProviders(),
-        profiles: this.profileStore.getProfiles(),
-        bindings: this.bindingManager.getBindings(),
-      };
-      await this.plugin.saveData(STORAGE_KEY, data);
-      if (this.onStateChange) {
-        this.onStateChange();
-      }
-    } catch (err) {
-      this.logError("Failed to save config data", err);
+    if (this.saveInFlight) {
+      this.savePending = true;
+      return this.saveInFlight;
     }
+
+    this.saveInFlight = (async () => {
+      try {
+        do {
+          this.savePending = false;
+          const data: ApiSwitchStorage = {
+            providers: this.providerStore.getProviders(),
+            profiles: this.profileStore.getProfiles(),
+            bindings: this.bindingManager.getBindings(),
+          };
+          await this.plugin!.saveData(STORAGE_KEY, data);
+          if (this.onStateChange) {
+            this.onStateChange();
+          }
+        } while (this.savePending);
+      } catch (err) {
+        this.logError("Failed to save config data", err);
+      } finally {
+        this.saveInFlight = null;
+      }
+    })();
+
+    return this.saveInFlight;
   }
 
   private mountGlobal() {
@@ -390,18 +433,37 @@ export class ApiSwitchCore {
     // 通知所有关联此提供商的 Profile 绑定的插件
     for (const profile of this.profileStore.getProfiles()) {
       if (profile.providerId === provider.id) {
-        this.syncBindingsByProfile(profile.id);
+        await this.syncBindingsByProfile(profile.id);
       }
     }
   }
 
   async deleteProvider(providerId: string): Promise<void> {
-    await this.providerStore.deleteProvider(providerId);
-    // 解除 Profile 对该提供商的关联
+    // 先将关联 Profile 的继承参数物化回自身，防止清空 providerId 后退化为空壳配置
+    const affectedProfileIds: string[] = [];
     for (const profile of this.profileStore.getProfiles()) {
       if (profile.providerId === providerId) {
+        const effective = this.resolveEffectiveProfile(profile);
+        profile.provider = effective.provider;
+        profile.protocol = effective.protocol;
+        profile.baseUrl = effective.baseUrl;
+        profile.apiKey = effective.apiKey;
+        if (effective.headers) {
+          profile.headers = { ...effective.headers };
+        }
+        profile.requestTimeoutSeconds = effective.requestTimeoutSeconds;
+        if (effective.models) {
+          profile.models = [...effective.models];
+        }
+        profile.contextWindow = effective.contextWindow;
+        profile.providerUrl = effective.providerUrl;
         profile.providerId = undefined;
+        affectedProfileIds.push(profile.id);
       }
+    }
+    await this.providerStore.deleteProvider(providerId);
+    for (const profId of affectedProfileIds) {
+      await this.syncBindingsByProfile(profId);
     }
     await this.save();
   }
@@ -590,7 +652,7 @@ export class ApiSwitchCore {
 
     const autoRes = await this.ensureProviderForProfile(profile);
     await this.profileStore.updateProfile(profile);
-    this.syncBindingsByProfile(profile.id);
+    await this.syncBindingsByProfile(profile.id);
     return autoRes;
   }
 
@@ -600,12 +662,7 @@ export class ApiSwitchCore {
     const bindings = this.bindingManager.getBindings();
     for (const key in bindings) {
       if (bindings[key] === profileId) {
-        if (key.includes(":")) {
-          const [pluginId, slotId] = key.split(":");
-          entriesToUnbind.push({ pluginId, slotId });
-        } else {
-          entriesToUnbind.push({ pluginId: key });
-        }
+        entriesToUnbind.push(this.parseBindingKey(key));
       }
     }
 
@@ -1236,6 +1293,7 @@ export class ApiSwitchCore {
         await this.importProfiles(realAi._siyuanApiSwitch.profiles);
         if (realAi._siyuanApiSwitch.bindings && typeof realAi._siyuanApiSwitch.bindings === "object") {
           this.bindingManager.setBindings({ ...this.bindingManager.getBindings(), ...realAi._siyuanApiSwitch.bindings });
+          this.pruneDanglingBindings();
         }
       } else {
         // 如果是原生思源 ai.json（无 _siyuanApiSwitch），由 editing/agent/decision 派生 Profiles
@@ -1357,30 +1415,47 @@ export class ApiSwitchCore {
     await this.save();
   }
 
-  private syncBindingsByProfile(profileId: string) {
+  private async syncBindingsByProfile(profileId: string) {
     const bindings = this.bindingManager.getBindings();
+    const builtinScopes: ("editing" | "agent" | "decision")[] = [];
+    let syncAllBuiltin = false;
+
     for (const key in bindings) {
       if (bindings[key] === profileId) {
-        if (key.includes(":")) {
-          const [pluginId, slotId] = key.split(":");
-          const config = this.getBoundSharedConfig(pluginId, slotId);
-          this.bindingManager.notifyPluginUpdate(pluginId, config, slotId);
+        const parsed = this.parseBindingKey(key);
+        if (parsed.slotId !== undefined) {
+          const config = this.getBoundSharedConfig(parsed.pluginId, parsed.slotId);
+          this.bindingManager.notifyPluginUpdate(parsed.pluginId, config, parsed.slotId);
         } else {
           const config = this.getBoundSharedConfig(key);
           this.bindingManager.notifyPluginUpdate(key, config);
 
-          const profile = this.profileStore.getProfile(profileId);
           if (key === SIYUAN_BUILTIN_EDITING) {
-            this.updateSiyuanSystemAi(profile, "editing");
+            builtinScopes.push("editing");
           } else if (key === SIYUAN_BUILTIN_AGENT) {
-            this.updateSiyuanSystemAi(profile, "agent");
+            builtinScopes.push("agent");
           } else if (key === SIYUAN_BUILTIN_DECISION) {
-            this.updateSiyuanSystemAi(profile, "decision");
+            builtinScopes.push("decision");
           } else if (key === SIYUAN_BUILTIN_PREFIX) {
-            this.updateSiyuanSystemAi(profile, "all");
+            syncAllBuiltin = true;
           }
         }
       }
+    }
+
+    const profile = this.profileStore.getProfile(profileId);
+    if (!profile) return;
+
+    if (syncAllBuiltin) {
+      await this.updateSiyuanSystemAi(profile, "all");
+    } else if (builtinScopes.length === 1) {
+      await this.updateSiyuanSystemAi(profile, builtinScopes[0]);
+    } else if (builtinScopes.length > 1) {
+      const effective = this.resolveEffectiveProfile(profile);
+      await this.siyuanAdapter.updateSiyuanSystemAiBatch(
+        builtinScopes.map((scope) => ({ scope, effective })),
+        this.providerStore.getProviders()
+      );
     }
   }
 

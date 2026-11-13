@@ -89,7 +89,7 @@
             <button
               class="b3-button b3-button--primary mini-btn"
               type="button"
-              :disabled="testingConnection"
+              :disabled="isTaskRunning"
               @click="runConnectionTest"
               :data-tooltip="t('testConnectionTooltip')"
               data-tooltip-position="left"
@@ -99,7 +99,7 @@
             <button
               class="b3-button b3-button--primary mini-btn refresh-models-btn"
               type="button"
-              :disabled="refreshingModels"
+              :disabled="isTaskRunning"
               @click="refreshModels"
               :data-tooltip="localProvider.protocol === 'systemone' ? t('refreshModelsSystemOneTooltip') : t('refreshModelsTooltip')"
               data-tooltip-position="left"
@@ -130,10 +130,10 @@
           <!-- 选中模型的操作区 -->
           <div class="model-action-row" v-if="selectedModelName">
             <span class="model-action-label">{{ t('selectedModelLabel') }} <code>{{ selectedModelName }}</code></span>
-            <button class="b3-button b3-button--cancel mini-btn" type="button" :disabled="testingModel" @click="runDeepTest">
+            <button class="b3-button b3-button--cancel mini-btn" type="button" :disabled="isTaskRunning" @click="runDeepTest">
               {{ testingModel ? t('deepTesting') : t('deepTest') }}
             </button>
-            <button class="b3-button b3-button--cancel mini-btn" type="button" :disabled="probing" @click="confirmProbe">
+            <button class="b3-button b3-button--cancel mini-btn" type="button" :disabled="isTaskRunning" @click="confirmProbe">
               {{ probing ? probeProgressText : t('probeCapacity') }}
             </button>
           </div>
@@ -207,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { useSavedFeedback } from "@/composables/useSavedFeedback";
 import { useDirtySnapshot } from "@/composables/useDirtySnapshot";
 import { showMessage } from "siyuan";
@@ -245,12 +245,40 @@ const newModelInput = ref("");
 const headersText = ref("");
 const selectedModelName = ref("");
 
-// 操作态与反馈
-const refreshingModels = ref(false);
-const testingConnection = ref(false);
-const testingModel = ref(false);
-const probing = ref(false);
-const probeProgressText = ref(t("probing"));
+// 操作态与反馈（单一互斥任务状态机 + epoch 防串台）
+type ProbeTaskState =
+  | { status: "idle" }
+  | { status: "refreshing_models" }
+  | { status: "testing_connection" }
+  | { status: "testing_model"; model: string }
+  | { status: "probing_context"; model: string; progressText: string };
+
+const taskState = ref<ProbeTaskState>({ status: "idle" });
+const isTaskRunning = computed(() => taskState.value.status !== "idle");
+const refreshingModels = computed(() => taskState.value.status === "refreshing_models");
+const testingConnection = computed(() => taskState.value.status === "testing_connection");
+const testingModel = computed(() => taskState.value.status === "testing_model");
+const probing = computed(() => taskState.value.status === "probing_context");
+const probeProgressText = computed(() =>
+  taskState.value.status === "probing_context" ? taskState.value.progressText : t("probing")
+);
+
+let taskEpoch = 0;
+let probeAbortController: AbortController | null = null;
+
+const cancelActiveTasks = () => {
+  taskEpoch += 1;
+  if (probeAbortController) {
+    probeAbortController.abort();
+    probeAbortController = null;
+  }
+  taskState.value = { status: "idle" };
+};
+
+onUnmounted(() => {
+  cancelActiveTasks();
+});
+
 const actionMessage = ref("");
 const actionOk = ref<boolean | null>(null);
 const probeConfirm = ref<{ show: boolean; text: string }>({ show: false, text: "" });
@@ -280,7 +308,13 @@ const getNormalizedCurrentData = (): ApiProvider => {
   };
 };
 
-const { updateInitialSnapshot, isDirty } = useDirtySnapshot(() => JSON.stringify(getNormalizedCurrentData()));
+// 脏检查直接包含 headersText 原始文本，避免非法 JSON 时 fallback 回旧对象导致漏判脏态
+const { updateInitialSnapshot, isDirty } = useDirtySnapshot(() => ({
+  ...localProvider.value,
+  providerUrl: (localProvider.value.providerUrl || "").trim(),
+  models: localProvider.value.models ? [...localProvider.value.models] : [],
+  headersText: headersText.value,
+}));
 
 const resetDirty = () => {
   updateInitialSnapshot();
@@ -290,6 +324,7 @@ watch(
   () => props.provider,
   (newVal, oldVal) => {
     if (oldVal && newVal?.id !== oldVal?.id) {
+      cancelActiveTasks();
       clearSavedFeedback();
     }
     localProvider.value = {
@@ -395,15 +430,17 @@ const addModel = () => {
 
 /** 刷新可用模型：合并去重回填（不删除用户手动添加的模型），容量 = 接口元数据 > 内置快照表 */
 const refreshModels = async () => {
-  if (refreshingModels.value) return;
+  if (isTaskRunning.value) return;
   if (!currentDraft.value.baseUrl.trim()) {
     showMessage(t("fillBaseUrlBeforeRefresh"), 5000, "error");
     return;
   }
-  refreshingModels.value = true;
+  const myEpoch = ++taskEpoch;
+  taskState.value = { status: "refreshing_models" };
   setActionMessage("", null);
   try {
     const result = await fetchProviderModels(currentDraft.value);
+    if (myEpoch !== taskEpoch) return;
     const models = localProvider.value.models || [];
     let added = 0;
     let backfilled = 0;
@@ -437,47 +474,61 @@ const refreshModels = async () => {
       true
     );
   } catch (err: any) {
+    if (myEpoch !== taskEpoch) return;
     setActionMessage(t('refreshModelsFailed', { error: err?.message || err }), false);
   } finally {
-    refreshingModels.value = false;
+    if (myEpoch === taskEpoch) {
+      taskState.value = { status: "idle" };
+    }
   }
 };
 
 /** 一级测试：连通性（listModels，不消耗 tokens） */
 const runConnectionTest = async () => {
-  if (testingConnection.value) return;
-  testingConnection.value = true;
+  if (isTaskRunning.value) return;
+  const myEpoch = ++taskEpoch;
+  taskState.value = { status: "testing_connection" };
   setActionMessage(t('testingConnection'), null);
   try {
     const result = await testProviderConnection(currentDraft.value);
+    if (myEpoch !== taskEpoch) return;
     const testMsg = result.ok ? result.message : t('testConnectionFailed', { error: result.message });
     setActionMessage(testMsg, result.ok);
     showMessage(testMsg, 4000, result.ok ? "info" : "error");
   } catch (err: any) {
+    if (myEpoch !== taskEpoch) return;
     setActionMessage(t('testConnectionFailed', { error: err?.message || err }), false);
   } finally {
-    testingConnection.value = false;
+    if (myEpoch === taskEpoch) {
+      taskState.value = { status: "idle" };
+    }
   }
 };
 
 /** 二级测试：对选中模型发 max_tokens=1 真实请求（消耗少量 tokens） */
 const runDeepTest = async () => {
-  if (testingModel.value || !selectedModelName.value) return;
-  testingModel.value = true;
-  setActionMessage(t('deepTestingForModel', { model: selectedModelName.value }), null);
+  if (isTaskRunning.value || !selectedModelName.value) return;
+  const myEpoch = ++taskEpoch;
+  const model = selectedModelName.value;
+  taskState.value = { status: "testing_model", model };
+  setActionMessage(t('deepTestingForModel', { model }), null);
   try {
-    const result = await testProviderModel(currentDraft.value, selectedModelName.value);
+    const result = await testProviderModel(currentDraft.value, model);
+    if (myEpoch !== taskEpoch) return;
     setActionMessage(result.message, result.ok);
     showMessage(result.message, 5000, result.ok ? "info" : "error");
   } catch (err: any) {
+    if (myEpoch !== taskEpoch) return;
     setActionMessage(t('deepTestFailed', { error: err?.message || err }), false);
   } finally {
-    testingModel.value = false;
+    if (myEpoch === taskEpoch) {
+      taskState.value = { status: "idle" };
+    }
   }
 };
 
 const confirmProbe = () => {
-  if (probing.value || !selectedModelName.value) return;
+  if (isTaskRunning.value || !selectedModelName.value) return;
   if (!currentDraft.value.baseUrl.trim()) {
     showMessage(t("fillBaseUrlBeforeTest"), 5000, "error");
     return;
@@ -496,24 +547,32 @@ const confirmProbe = () => {
 
 const startProbe = async () => {
   probeConfirm.value.show = false;
-  if (probing.value) return;
-  probing.value = true;
+  if (isTaskRunning.value || !selectedModelName.value) return;
+  const myEpoch = ++taskEpoch;
+  const targetModel = selectedModelName.value;
+  const controller = new AbortController();
+  probeAbortController = controller;
+  taskState.value = { status: "probing_context", model: targetModel, progressText: t('probing') };
   setActionMessage(t('probing'), null);
   try {
-    const result = await probeModelContextLength(currentDraft.value, selectedModelName.value, {
+    const result = await probeModelContextLength(currentDraft.value, targetModel, {
+      signal: controller.signal,
       onProgress: (p) => {
-        probeProgressText.value = t('probingProgress', {
+        if (myEpoch !== taskEpoch) return;
+        const progressText = t('probingProgress', {
           attempt: p.attempt,
           maxRequests: p.maxRequests,
           tokens: formatContextLength(p.tokens),
         });
-        setActionMessage(probeProgressText.value, null);
+        taskState.value = { status: "probing_context", model: targetModel, progressText };
+        setActionMessage(progressText, null);
       },
     });
+    if (myEpoch !== taskEpoch) return;
 
     if (result.contextLength > 0) {
       const target = (localProvider.value.models || []).find(
-        (m) => (m.name || m.id) === selectedModelName.value
+        (m) => (m.name || m.id) === targetModel
       );
       if (target) {
         target.contextLength = result.contextLength;
@@ -529,16 +588,22 @@ const startProbe = async () => {
         }),
         true
       );
-      showMessage(t('probeSuccessToast', { model: selectedModelName.value, capacity: formatContextLength(result.contextLength) }), 4000, "info");
+      showMessage(t('probeSuccessToast', { model: targetModel, capacity: formatContextLength(result.contextLength) }), 4000, "info");
     } else if (result.aborted) {
       setActionMessage(t('probeAborted', { reason: result.aborted }), false);
     } else {
       setActionMessage(t('probeFailedMin'), false);
     }
   } catch (err: any) {
+    if (myEpoch !== taskEpoch) return;
     setActionMessage(t('probeFailed', { error: err?.message || err }), false);
   } finally {
-    probing.value = false;
+    if (probeAbortController === controller) {
+      probeAbortController = null;
+    }
+    if (myEpoch === taskEpoch) {
+      taskState.value = { status: "idle" };
+    }
   }
 };
 

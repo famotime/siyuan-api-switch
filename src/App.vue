@@ -164,7 +164,7 @@
                   <div 
                     v-for="prof in profiles" 
                     :key="prof.id" 
-                    :class="['profile-item', { active: selectedProfileId === prof.id }]"
+                    :class="['profile-item', { active: activeView === 'profile' && selectedProfileId === prof.id }]"
                     @click="selectProfile(prof.id)"
                   >
                     <div class="profile-item-meta">
@@ -201,7 +201,7 @@
                   <div 
                     v-for="plug in registeredPlugins" 
                     :key="plug.pluginId" 
-                    :class="['plugin-item', { active: activePluginId === plug.pluginId }]"
+                    :class="['plugin-item', { active: activeView === 'plugin' && activePluginId === plug.pluginId }]"
                     @click="selectPlugin(plug.pluginId)"
                   >
                     <div class="plugin-item-info">
@@ -390,29 +390,35 @@ const showToast = (message: string, type: "success" | "info" | "error" = "info",
   }, duration)
 }
 
-// 响应式数据
+// 响应式数据与显式工作区路由状态机
 const providers = ref<ApiProvider[]>([])
 const profiles = ref<ApiProfile[]>([])
 const registeredPlugins = ref<RegisteredPluginInfo[]>([])
 
-const activeView = ref<'provider' | 'profile' | 'plugin' | 'empty'>('empty')
-const selectedProviderId = ref<string | null>(null)
-const selectedProfileId = ref<string | null>(null)
-const activePluginId = ref<string | null>(null)
+type WorkspaceRoute =
+  | { view: 'empty' }
+  | { view: 'provider'; mode: 'create' | 'edit'; providerId: string | null; draft: ApiProvider }
+  | { view: 'profile'; mode: 'create' | 'edit'; profileId: string | null; draft: ApiProfile }
+  | { view: 'plugin'; pluginId: string }
 
-const editingProvider = ref<ApiProvider | null>(null)
-const isNewProvider = ref(false)
-
-const editingProfile = ref<ApiProfile | null>(null)
-const isNewProfile = ref(false)
+const route = ref<WorkspaceRoute>({ view: 'empty' })
+const activeView = computed(() => route.value.view)
+const selectedProviderId = computed(() => (route.value.view === 'provider' ? route.value.providerId : null))
+const selectedProfileId = computed(() => (route.value.view === 'profile' ? route.value.profileId : null))
+const activePluginId = computed(() => (route.value.view === 'plugin' ? route.value.pluginId : null))
+const editingProvider = computed(() => (route.value.view === 'provider' ? route.value.draft : null))
+const isNewProvider = computed(() => route.value.view === 'provider' && route.value.mode === 'create')
+const editingProfile = computed(() => (route.value.view === 'profile' ? route.value.draft : null))
+const isNewProfile = computed(() => route.value.view === 'profile' && route.value.mode === 'create')
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const providerPanelRef = ref<InstanceType<typeof ProviderEditPanel> | null>(null)
 const profilePanelRef = ref<InstanceType<typeof ProfileEditPanel> | null>(null)
 
 const activePlugin = computed(() => {
-  if (activeView.value !== 'plugin' || !activePluginId.value) return null
-  return registeredPlugins.value.find((p) => p.pluginId === activePluginId.value) || null
+  if (route.value.view !== 'plugin') return null
+  const pid = route.value.pluginId
+  return registeredPlugins.value.find((p) => p.pluginId === pid) || null
 })
 
 // 确认弹窗状态
@@ -423,6 +429,7 @@ interface ConfirmDialogOptions {
   cancelText?: string
   onConfirm: () => void | Promise<void>
   onCancel?: () => void
+  onDismiss?: () => void
 }
 
 const confirmDialog = ref<{
@@ -433,6 +440,7 @@ const confirmDialog = ref<{
   cancelText: string
   onConfirm: () => void | Promise<void>
   onCancel?: () => void
+  onDismiss?: () => void
 }>({
   show: false,
   title: "",
@@ -441,6 +449,7 @@ const confirmDialog = ref<{
   cancelText: t('cancel'),
   onConfirm: () => {},
   onCancel: undefined,
+  onDismiss: undefined,
 })
 
 const showCustomConfirm = (
@@ -448,6 +457,13 @@ const showCustomConfirm = (
   text?: string,
   onConfirm?: () => void | Promise<void>
 ) => {
+  if (confirmDialog.value.show) {
+    const prevDismiss = confirmDialog.value.onDismiss ?? confirmDialog.value.onCancel
+    confirmDialog.value.show = false
+    confirmDialog.value.onCancel = undefined
+    confirmDialog.value.onDismiss = undefined
+    prevDismiss?.()
+  }
   if (typeof titleOrOptions === 'object') {
     confirmDialog.value = {
       show: true,
@@ -457,6 +473,7 @@ const showCustomConfirm = (
       cancelText: titleOrOptions.cancelText || t('cancel'),
       onConfirm: titleOrOptions.onConfirm,
       onCancel: titleOrOptions.onCancel,
+      onDismiss: titleOrOptions.onDismiss,
     }
   } else {
     confirmDialog.value = {
@@ -467,6 +484,7 @@ const showCustomConfirm = (
       cancelText: t('cancel'),
       onConfirm: onConfirm || (() => {}),
       onCancel: undefined,
+      onDismiss: undefined,
     }
   }
 }
@@ -474,6 +492,8 @@ const showCustomConfirm = (
 const handleConfirmOk = async () => {
   const onConfirm = confirmDialog.value.onConfirm
   confirmDialog.value.show = false
+  confirmDialog.value.onCancel = undefined
+  confirmDialog.value.onDismiss = undefined
   if (onConfirm) {
     await onConfirm()
   }
@@ -482,13 +502,25 @@ const handleConfirmOk = async () => {
 const handleConfirmCancel = () => {
   const onCancel = confirmDialog.value.onCancel
   confirmDialog.value.show = false
+  confirmDialog.value.onCancel = undefined
+  confirmDialog.value.onDismiss = undefined
   if (onCancel) {
     onCancel()
   }
 }
 
-const handleConfirmOverlayClick = () => {
+const handleConfirmDismiss = () => {
+  const onDismiss = confirmDialog.value.onDismiss ?? confirmDialog.value.onCancel
   confirmDialog.value.show = false
+  confirmDialog.value.onCancel = undefined
+  confirmDialog.value.onDismiss = undefined
+  if (onDismiss) {
+    onDismiss()
+  }
+}
+
+const handleConfirmOverlayClick = () => {
+  handleConfirmDismiss()
 }
 
 // 脏检查辅助
@@ -502,52 +534,65 @@ const isCurrentViewDirty = (): { dirty: boolean; type: 'provider' | 'profile' } 
   return { dirty: false, type: 'provider' }
 }
 
-const handleSafeNavigate = (navigateAction: () => void | Promise<void>) => {
+const requestSafeNavigate = (): Promise<boolean> => {
   const { dirty, type } = isCurrentViewDirty()
   if (!dirty) {
-    navigateAction()
-    return
+    return Promise.resolve(true)
   }
 
-  const typeName = type === 'provider' ? t('typeProvider') : t('typeProfile')
-  showCustomConfirm({
-    title: t('unsavedChangesTitle'),
-    text: t('unsavedChangesText', { type: typeName }),
-    confirmText: t('save'),
-    cancelText: t('discard'),
-    onConfirm: async () => {
-      let saved = false
-      if (type === 'provider') {
-        const data = providerPanelRef.value?.getCurrentData()
-        if (data) {
-          saved = await saveProvider(data, true)
-        }
-      } else {
-        const data = profilePanelRef.value?.getCurrentData()
-        if (data) {
-          saved = await saveProfile(data, true)
-        }
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+    const finish = (ok: boolean) => {
+      if (!settled) {
+        settled = true
+        resolve(ok)
       }
+    }
 
-      if (saved) {
-        confirmDialog.value.show = false
-        await navigateAction()
-      }
-    },
-    onCancel: async () => {
-      if (type === 'provider') {
-        providerPanelRef.value?.resetDirty()
-      } else {
-        profilePanelRef.value?.resetDirty()
-      }
-      confirmDialog.value.show = false
-      await navigateAction()
-    },
+    const typeName = type === 'provider' ? t('typeProvider') : t('typeProfile')
+    showCustomConfirm({
+      title: t('unsavedChangesTitle'),
+      text: t('unsavedChangesText', { type: typeName }),
+      confirmText: t('save'),
+      cancelText: t('discard'),
+      onConfirm: async () => {
+        let saved = false
+        if (type === 'provider') {
+          const data = providerPanelRef.value?.getCurrentData()
+          if (data) {
+            saved = await saveProvider(data, true)
+          }
+        } else {
+          const data = profilePanelRef.value?.getCurrentData()
+          if (data) {
+            saved = await saveProfile(data, true)
+          }
+        }
+        finish(saved)
+      },
+      onCancel: () => {
+        if (type === 'provider') {
+          providerPanelRef.value?.resetDirty()
+        } else {
+          profilePanelRef.value?.resetDirty()
+        }
+        finish(true)
+      },
+      onDismiss: () => {
+        finish(false)
+      },
+    })
   })
 }
 
+const handleSafeNavigate = async (navigateAction: () => void | Promise<void>) => {
+  if (await requestSafeNavigate()) {
+    await navigateAction()
+  }
+}
+
 const handleCloseDialog = () => {
-  handleSafeNavigate(() => {
+  void handleSafeNavigate(() => {
     closeDialog()
   })
 }
@@ -556,7 +601,7 @@ const handleCloseDialog = () => {
 const handleGlobalKeydown = (e: KeyboardEvent) => {
   if (e.key === "Escape" && !e.repeat) {
     if (confirmDialog.value.show) {
-      handleConfirmCancel()
+      handleConfirmDismiss()
       e.preventDefault()
       e.stopPropagation()
       return
@@ -598,24 +643,26 @@ const refreshData = () => {
   registeredPlugins.value = [...apiSwitchCore.getRegisteredPlugins()]
 }
 
-// 选中与切换操作
-const selectProvider = (id: string) => {
-  handleSafeNavigate(() => {
-    activeView.value = 'provider'
-    selectedProviderId.value = id
-    selectedProfileId.value = null
-    activePluginId.value = null
-    isNewProvider.value = false
+// 选中与切换操作（先校验目标存在，再原子切换路由状态）
+const applySelectProvider = (id: string) => {
+  const prov = providers.value.find((p) => p.id === id)
+  if (!prov) return
+  route.value = {
+    view: 'provider',
+    mode: 'edit',
+    providerId: id,
+    draft: JSON.parse(JSON.stringify(prov)),
+  }
+}
 
-    const prov = providers.value.find((p) => p.id === id)
-    if (prov) {
-      editingProvider.value = JSON.parse(JSON.stringify(prov))
-    }
+const selectProvider = (id: string) => {
+  void handleSafeNavigate(() => {
+    applySelectProvider(id)
   })
 }
 
 const createNewProvider = () => {
-  handleSafeNavigate(() => {
+  void handleSafeNavigate(() => {
     // 「+」先弹出预置目录（与思源原生一致）；选择后再进入表单
     showPresetPicker.value = true
   })
@@ -628,16 +675,11 @@ const createProviderFromPreset = (presetId: string) => {
   const preset = PRESET_PROVIDER_LIST.find((p) => p.id === presetId)
   if (!preset) return
 
-  handleSafeNavigate(() => {
-    activeView.value = 'provider'
-    selectedProviderId.value = null
-    selectedProfileId.value = null
-    activePluginId.value = null
-    isNewProvider.value = true
-
+  void handleSafeNavigate(() => {
+    let draft: ApiProvider
     if (preset.category === 'custom') {
       // 自定义：进入空白表单
-      editingProvider.value = {
+      draft = {
         id: "",
         displayName: t('newProviderDefaultName'),
         enabled: true,
@@ -658,7 +700,7 @@ const createProviderFromPreset = (presetId: string) => {
         enabled: true,
         contextLength: lookupModelContextLength(name) || undefined,
       }))
-      editingProvider.value = {
+      draft = {
         id: "",
         displayName: preset.displayName,
         enabled: true,
@@ -671,56 +713,61 @@ const createProviderFromPreset = (presetId: string) => {
         providerUrl: preset.providerUrl || "",
       }
     }
-  })
-}
-
-const selectProfile = (id: string) => {
-  handleSafeNavigate(() => {
-    activeView.value = 'profile'
-    selectedProfileId.value = id
-    selectedProviderId.value = null
-    activePluginId.value = null
-    isNewProfile.value = false
-
-    const prof = profiles.value.find((p) => p.id === id)
-    if (prof) {
-      editingProfile.value = JSON.parse(JSON.stringify(prof))
+    route.value = {
+      view: 'provider',
+      mode: 'create',
+      providerId: null,
+      draft,
     }
   })
 }
 
-const createNewProfile = () => {
-  handleSafeNavigate(() => {
-    activeView.value = 'profile'
-    selectedProfileId.value = null
-    selectedProviderId.value = null
-    activePluginId.value = null
-    isNewProfile.value = true
+const applySelectProfile = (id: string) => {
+  const prof = profiles.value.find((p) => p.id === id)
+  if (!prof) return
+  route.value = {
+    view: 'profile',
+    mode: 'edit',
+    profileId: id,
+    draft: JSON.parse(JSON.stringify(prof)),
+  }
+}
 
-    editingProfile.value = {
-      id: "",
-      name: "",
-      providerId: undefined,
-      provider: "deepseek",
-      baseUrl: "https://api.deepseek.com",
-      apiKey: "",
-      model: "deepseek-chat",
-      models: ["deepseek-chat", "deepseek-reasoner"],
-      requestTimeoutSeconds: 60,
-      temperature: 0.7,
-      maxTokens: 4096,
-      memo: "",
-      providerUrl: "https://platform.deepseek.com/api_keys",
+const selectProfile = (id: string) => {
+  void handleSafeNavigate(() => {
+    applySelectProfile(id)
+  })
+}
+
+const createNewProfile = () => {
+  void handleSafeNavigate(() => {
+    route.value = {
+      view: 'profile',
+      mode: 'create',
+      profileId: null,
+      draft: {
+        id: "",
+        name: "",
+        providerId: undefined,
+        provider: "deepseek",
+        baseUrl: "https://api.deepseek.com",
+        apiKey: "",
+        model: "deepseek-chat",
+        models: ["deepseek-chat", "deepseek-reasoner"],
+        requestTimeoutSeconds: 60,
+        temperature: 0.7,
+        maxTokens: 4096,
+        memo: "",
+        providerUrl: "https://platform.deepseek.com/api_keys",
+      },
     }
   })
 }
 
 const selectPlugin = (id: string) => {
-  handleSafeNavigate(() => {
-    activeView.value = 'plugin'
-    activePluginId.value = id
-    selectedProviderId.value = null
-    selectedProfileId.value = null
+  void handleSafeNavigate(() => {
+    if (!registeredPlugins.value.some((p) => p.pluginId === id)) return
+    route.value = { view: 'plugin', pluginId: id }
   })
 }
 
@@ -738,8 +785,6 @@ const saveProvider = async (providerData: ApiProvider, skipReselect = false): Pr
     if (isNewProvider.value) {
       const newProv = await apiSwitchCore.addProvider(providerData)
       targetId = newProv.id
-      selectedProviderId.value = targetId
-      isNewProvider.value = false
     } else {
       await apiSwitchCore.updateProvider(providerData)
     }
@@ -750,7 +795,7 @@ const saveProvider = async (providerData: ApiProvider, skipReselect = false): Pr
     providerPanelRef.value?.resetDirty?.()
 
     if (!skipReselect && targetId) {
-      selectProvider(targetId)
+      applySelectProvider(targetId)
     }
     nextTick(() => {
       providerPanelRef.value?.showSavedFeedback?.()
@@ -769,28 +814,23 @@ const deleteProvider = (id: string) => {
     try {
       providerPanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProvider(id)
-      activeView.value = 'empty'
-      selectedProviderId.value = null
+      route.value = { view: 'empty' }
       refreshData()
-      editingProvider.value = null
     } catch (err) {
       logDebug("Exception in deleteProvider", err)
     }
   })
 }
 
-const quickDeleteProvider = (prov: ApiProvider) => {
-  handleSafeNavigate(() => {
-    selectProvider(prov.id)
-    deleteProvider(prov.id)
-  })
+const quickDeleteProvider = async (prov: ApiProvider) => {
+  if (!(await requestSafeNavigate())) return
+  applySelectProvider(prov.id)
+  deleteProvider(prov.id)
 }
 
 const cancelProviderEdit = () => {
-  handleSafeNavigate(() => {
-    activeView.value = 'empty'
-    selectedProviderId.value = null
-    editingProvider.value = null
+  void handleSafeNavigate(() => {
+    route.value = { view: 'empty' }
   })
 }
 
@@ -828,8 +868,6 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
     if (isNewProfile.value) {
       const newProf = await apiSwitchCore.addProfile(profileData)
       targetId = newProf.id
-      selectedProfileId.value = targetId
-      isNewProfile.value = false
       autoRes = (newProf as any)._autoProviderResult || null
     } else {
       autoRes = await apiSwitchCore.updateProfile(profileData)
@@ -854,7 +892,7 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
     profilePanelRef.value?.resetDirty?.()
 
     if (!skipReselect && targetId) {
-      selectProfile(targetId)
+      applySelectProfile(targetId)
     }
     nextTick(() => {
       profilePanelRef.value?.showSavedFeedback?.()
@@ -873,28 +911,23 @@ const deleteProfile = (id: string) => {
     try {
       profilePanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProfile(id)
-      activeView.value = 'empty'
-      selectedProfileId.value = null
+      route.value = { view: 'empty' }
       refreshData()
-      editingProfile.value = null
     } catch (err) {
       logDebug("Exception in deleteProfile", err)
     }
   })
 }
 
-const quickDeleteProfile = (prof: ApiProfile) => {
-  handleSafeNavigate(() => {
-    selectProfile(prof.id)
-    deleteProfile(prof.id)
-  })
+const quickDeleteProfile = async (prof: ApiProfile) => {
+  if (!(await requestSafeNavigate())) return
+  applySelectProfile(prof.id)
+  deleteProfile(prof.id)
 }
 
 const cancelEdit = () => {
-  handleSafeNavigate(() => {
-    activeView.value = 'empty'
-    selectedProfileId.value = null
-    editingProfile.value = null
+  void handleSafeNavigate(() => {
+    route.value = { view: 'empty' }
   })
 }
 

@@ -51,15 +51,19 @@ export interface ProbeOptions {
   maxRequests?: number;
   granularity?: number;
   requestTimeoutMs?: number;
+  signal?: AbortSignal;
   onProgress?: (progress: ProbeProgress) => void;
 }
+
+export type ProbeStopReason = "overflow" | "budget_exhausted" | "max_ladder" | "aborted";
 
 export interface ProbeResult {
   contextLength: number;      // 探得的真实下界（确认可容纳的输入 tokens）
   lowerBound: number;
-  upperBound: number | null;  // 确认溢出的规模；null 表示未触顶（已达探测上梯）
+  upperBound: number | null;  // 确认溢出的规模；null 表示未触顶（已达探测上梯或预算耗尽）
   requests: number;
-  aborted?: string;           // 硬错误（鉴权/网络/限流等）时中止的原因
+  stopReason?: ProbeStopReason;
+  aborted?: string;           // 硬错误（鉴权/网络/限流/用户取消等）时中止的原因
 }
 
 /** 内核 providerConfig 草稿（kernel/apicontract/setting.go SettingProvider） */
@@ -601,6 +605,20 @@ async function sendProbeRequest(
         },
       },
     };
+  } else if (protocol === "openai-responses") {
+    url = /\/responses$/i.test(baseUrl) ? baseUrl : `${baseUrl}/responses`;
+    headers = [
+      { "content-type": "application/json" },
+    ];
+    if ((draft.apiKey || "").trim()) {
+      headers.push({ "Authorization": `Bearer ${(draft.apiKey || "").trim()}` });
+    }
+    payload = {
+      model,
+      max_output_tokens: 16,
+      stream: false,
+      input: buildFillerContent(targetTokens),
+    };
   } else {
     url = `${baseUrl}/chat/completions`;
     headers = [
@@ -681,6 +699,9 @@ export async function probeModelContextLength(
   let requests = 0;
   let lowerBound = 0;
   let upperBound: number | null = null;
+  let ladderExhausted = false;
+
+  const isAborted = () => Boolean(options.signal?.aborted);
 
   const attempt = async (tokens: number, phase: ProbeProgress["phase"]): Promise<ForwardOutcome> => {
     requests += 1;
@@ -690,39 +711,69 @@ export async function probeModelContextLength(
 
   try {
     // 阶段一：指数上探
-    for (const candidate of PROBE_LADDER) {
+    for (let i = 0; i < PROBE_LADDER.length; i++) {
+      const candidate = PROBE_LADDER[i];
+      if (isAborted()) {
+        return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: "探测已取消" };
+      }
       if (requests >= maxRequests) break;
       const outcome = await attempt(candidate, "exponential");
+      if (isAborted()) {
+        return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: "探测已取消" };
+      }
       if (outcome.pass) {
         lowerBound = candidate;
+        if (i === PROBE_LADDER.length - 1) {
+          ladderExhausted = true;
+        }
       } else if (outcome.contextOverflow) {
         upperBound = candidate;
         break;
       } else {
-        return { contextLength: lowerBound, lowerBound, upperBound, requests, aborted: outcome.message };
+        return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: outcome.message };
       }
     }
 
     // 阶段二：在 (lowerBound, upperBound) 内二分逼进
     if (upperBound !== null) {
       while (requests < maxRequests && upperBound - lowerBound > granularity) {
+        if (isAborted()) {
+          return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: "探测已取消" };
+        }
         const mid = Math.floor((lowerBound + upperBound) / 2 / granularity) * granularity;
         if (mid <= lowerBound || mid >= upperBound) break;
         const outcome = await attempt(mid, "bisect");
+        if (isAborted()) {
+          return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: "探测已取消" };
+        }
         if (outcome.pass) {
           lowerBound = mid;
         } else if (outcome.contextOverflow) {
           upperBound = mid;
         } else {
-          return { contextLength: lowerBound, lowerBound, upperBound, requests, aborted: outcome.message };
+          return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason: "aborted", aborted: outcome.message };
         }
       }
     }
   } catch (err: any) {
-    return { contextLength: lowerBound, lowerBound, upperBound, requests, aborted: err?.message || String(err) };
+    return {
+      contextLength: lowerBound,
+      lowerBound,
+      upperBound,
+      requests,
+      stopReason: "aborted",
+      aborted: err?.message || String(err),
+    };
   }
 
-  return { contextLength: lowerBound, lowerBound, upperBound, requests };
+  let stopReason: ProbeStopReason;
+  if (upperBound !== null) {
+    stopReason = requests >= maxRequests && upperBound - lowerBound > granularity ? "budget_exhausted" : "overflow";
+  } else {
+    stopReason = ladderExhausted ? "max_ladder" : "budget_exhausted";
+  }
+
+  return { contextLength: lowerBound, lowerBound, upperBound, requests, stopReason };
 }
 
 /** 探测成本的最坏情况估算（输入 tokens 合计），用于确认弹窗展示 */

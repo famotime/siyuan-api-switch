@@ -1,10 +1,12 @@
-import { ref, onMounted, onUnmounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 
 const STORAGE_KEY_SIZE = "sy_api_switch_dialog_size";
 const DEFAULT_WIDTH = 920;
 const DEFAULT_HEIGHT = 680;
 const MIN_WIDTH = 640;
 const MIN_HEIGHT = 480;
+
+type WindowInteractionMode = "idle" | "dragging" | "resizing";
 
 export function useWindowDrag(enableDebugLog?: () => boolean) {
   const showDialog = ref(false);
@@ -13,9 +15,20 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
   const dialogTranslateX = ref(0);
   const dialogTranslateY = ref(0);
   const isMaximized = ref(false);
-  const isDraggingWindow = ref(false);
-  const isResizingWindow = ref(false);
+  const interactionMode = ref<WindowInteractionMode>("idle");
+  const isDraggingWindow = computed(() => interactionMode.value === "dragging");
+  const isResizingWindow = computed(() => interactionMode.value === "resizing");
   const prevWindowState = ref<{ width: number; height: number; x: number; y: number } | null>(null);
+  let activeInteractionCleanup: (() => void) | null = null;
+
+  const cleanupActiveInteraction = () => {
+    if (activeInteractionCleanup) {
+      const fn = activeInteractionCleanup;
+      activeInteractionCleanup = null;
+      fn();
+    }
+    interactionMode.value = "idle";
+  };
 
   // 加载本地持久化的弹窗尺寸
   const loadSavedDialogSize = () => {
@@ -58,25 +71,30 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
 
   // 打开弹窗
   const openDialog = () => {
+    cleanupActiveInteraction();
     loadSavedDialogSize();
     dialogTranslateX.value = 0;
     dialogTranslateY.value = 0;
     isMaximized.value = false;
+    prevWindowState.value = null;
     showDialog.value = true;
   };
 
   // 关闭弹窗
   const closeDialog = () => {
+    cleanupActiveInteraction();
     showDialog.value = false;
   };
 
   // 8 方向拖拽缩放
   const onResizeStart = (e: MouseEvent, direction: string) => {
+    cleanupActiveInteraction();
     if (isMaximized.value) {
       isMaximized.value = false;
+      prevWindowState.value = null;
     }
 
-    isResizingWindow.value = true;
+    interactionMode.value = "resizing";
     const startX = e.clientX;
     const startY = e.clientY;
     const startW = dialogWidth.value;
@@ -125,16 +143,26 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
       }
     };
 
-    const onMouseUp = () => {
-      isResizingWindow.value = false;
+    const detach = () => {
       document.body.style.userSelect = originalUserSelect;
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("blur", onMouseUp);
+    };
+
+    const onMouseUp = () => {
+      if (activeInteractionCleanup === detach) {
+        activeInteractionCleanup = null;
+      }
+      detach();
+      interactionMode.value = "idle";
       saveDialogSize();
     };
 
+    activeInteractionCleanup = detach;
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("blur", onMouseUp);
   };
 
   // 顶栏按住拖拽移动弹窗
@@ -148,7 +176,8 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
       return;
     }
 
-    isDraggingWindow.value = true;
+    cleanupActiveInteraction();
+    interactionMode.value = "dragging";
     const startX = e.clientX;
     const startY = e.clientY;
     const startTx = dialogTranslateX.value;
@@ -171,15 +200,25 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
       dialogTranslateY.value = Math.min(maxTy, Math.max(-maxTy, newTy));
     };
 
-    const onMouseUp = () => {
-      isDraggingWindow.value = false;
+    const detach = () => {
       document.body.style.userSelect = originalUserSelect;
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("blur", onMouseUp);
     };
 
+    const onMouseUp = () => {
+      if (activeInteractionCleanup === detach) {
+        activeInteractionCleanup = null;
+      }
+      detach();
+      interactionMode.value = "idle";
+    };
+
+    activeInteractionCleanup = detach;
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("blur", onMouseUp);
   };
 
   // 最大化 / 还原切换
@@ -236,6 +275,7 @@ export function useWindowDrag(enableDebugLog?: () => boolean) {
   });
 
   onUnmounted(() => {
+    cleanupActiveInteraction();
     window.removeEventListener("resize", handleWindowResize);
   });
 

@@ -299,6 +299,10 @@ export function extractSiyuanAiSettings(aiConfig: any): {
 export class SiyuanAdapter {
   private log: (msg: string, ...args: any[]) => void;
   private logError: (msg: string, ...args: any[]) => void;
+  // 串行写回队列：防止并发 Read-Modify-Write (getConf -> setAI) 互相覆盖
+  private writeQueue: Promise<unknown> = Promise.resolve();
+  // 写回版本号：防止慢返回的异步 getConf 回读把内存缓存回滚到旧状态
+  private systemConfigSyncEpoch = 0;
 
   constructor(
     log: (msg: string, ...args: any[]) => void,
@@ -306,6 +310,12 @@ export class SiyuanAdapter {
   ) {
     this.log = log;
     this.logError = logError;
+  }
+
+  private enqueueWrite<T>(task: () => Promise<T>): Promise<T> {
+    const next = this.writeQueue.then(task, task);
+    this.writeQueue = next.catch(() => {});
+    return next;
   }
 
   async fetchSystemAiConfig(): Promise<any> {
@@ -320,13 +330,20 @@ export class SiyuanAdapter {
   }
 
   async setSystemAiConfig(aiConfig: any): Promise<boolean> {
+    const syncEpoch = ++this.systemConfigSyncEpoch;
     const res = await fetchSyncPost("/api/setting/setAI", aiConfig);
     if (res && res.code === 0) {
       if ((window as any).siyuan?.config) {
         (window as any).siyuan.config.ai = aiConfig;
       }
       fetchSyncPost("/api/system/getConf", {}).then((confData) => {
-        if (confData && confData.code === 0 && confData.data?.ai && (window as any).siyuan?.config) {
+        if (
+          syncEpoch === this.systemConfigSyncEpoch &&
+          confData &&
+          confData.code === 0 &&
+          confData.data?.ai &&
+          (window as any).siyuan?.config
+        ) {
           (window as any).siyuan.config.ai = confData.data.ai;
         }
       }).catch(() => {});
@@ -503,46 +520,48 @@ export class SiyuanAdapter {
   ): Promise<void> {
     if (!effective) return;
 
-    try {
-      const currentAi = await this.fetchSystemAiConfig();
-      let aiConfig = JSON.parse(JSON.stringify(currentAi || {}));
+    return this.enqueueWrite(async () => {
+      try {
+        const currentAi = await this.fetchSystemAiConfig();
+        let aiConfig = JSON.parse(JSON.stringify(currentAi || {}));
 
-      if (typeof aiConfig === "object") {
-        if (!Array.isArray(aiConfig.providers)) {
-          aiConfig.providers = [];
-        }
-
-        // 决策模型独立更新
-        if (targetScope === "decision" || (targetScope === "all" && effective.isDecisionModel)) {
-          this.applyDecisionScope(aiConfig, effective, false);
-        }
-
-        // 编辑器与智能体：需要确保 Provider 存在
-        if (targetScope === "editing" || targetScope === "agent" || targetScope === "all") {
-          const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
-          if (targetScope === "agent" || targetScope === "all") {
-            this.applyAgentParams(aiConfig, effective, targetModelId);
+        if (typeof aiConfig === "object") {
+          if (!Array.isArray(aiConfig.providers)) {
+            aiConfig.providers = [];
           }
-          if (targetScope === "editing" || targetScope === "all") {
-            this.applyEditingParams(aiConfig, effective, targetModelId);
+
+          // 决策模型独立更新
+          if (targetScope === "decision" || (targetScope === "all" && effective.isDecisionModel)) {
+            this.applyDecisionScope(aiConfig, effective, false);
+          }
+
+          // 编辑器与智能体：需要确保 Provider 存在
+          if (targetScope === "editing" || targetScope === "agent" || targetScope === "all") {
+            const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
+            if (targetScope === "agent" || targetScope === "all") {
+              this.applyAgentParams(aiConfig, effective, targetModelId);
+            }
+            if (targetScope === "editing" || targetScope === "all") {
+              this.applyEditingParams(aiConfig, effective, targetModelId);
+            }
           }
         }
-      }
 
-      // 旧版兼容更新（仅在写回编辑器配置时更新原生 openAI 字段，不污染决策模型与智能体）
-      if (targetScope === "editing" || (targetScope === "all" && !effective.isDecisionModel)) {
-        this.syncLegacyOpenAi(aiConfig, effective);
-      }
+        // 旧版兼容更新（仅在写回编辑器配置时更新原生 openAI 字段，不污染决策模型与智能体）
+        if (targetScope === "editing" || (targetScope === "all" && !effective.isDecisionModel)) {
+          this.syncLegacyOpenAi(aiConfig, effective);
+        }
 
-      const success = await this.setSystemAiConfig(aiConfig);
-      if (success) {
-        this.log(`Successfully synchronized to Siyuan system AI (scope: ${targetScope})`);
-      } else {
-        this.logError("Failed to synchronize to Siyuan system AI");
+        const success = await this.setSystemAiConfig(aiConfig);
+        if (success) {
+          this.log(`Successfully synchronized to Siyuan system AI (scope: ${targetScope})`);
+        } else {
+          this.logError("Failed to synchronize to Siyuan system AI");
+        }
+      } catch (err) {
+        this.logError("Error updating Siyuan system AI", err);
       }
-    } catch (err) {
-      this.logError("Error updating Siyuan system AI", err);
-    }
+    });
   }
 
   /**
@@ -557,48 +576,50 @@ export class SiyuanAdapter {
   ): Promise<boolean> {
     if (!tasks || tasks.length === 0) return true;
 
-    try {
-      const currentAi = await this.fetchSystemAiConfig();
-      let aiConfig = JSON.parse(JSON.stringify(currentAi || {}));
+    return this.enqueueWrite(async () => {
+      try {
+        const currentAi = await this.fetchSystemAiConfig();
+        let aiConfig = JSON.parse(JSON.stringify(currentAi || {}));
 
-      if (typeof aiConfig !== "object" || !aiConfig) {
-        aiConfig = {};
-      }
-      if (!Array.isArray(aiConfig.providers)) {
-        aiConfig.providers = [];
-      }
+        if (typeof aiConfig !== "object" || !aiConfig) {
+          aiConfig = {};
+        }
+        if (!Array.isArray(aiConfig.providers)) {
+          aiConfig.providers = [];
+        }
 
-      for (const task of tasks) {
-        const { scope, effective } = task;
-        if (!effective) continue;
+        for (const task of tasks) {
+          const { scope, effective } = task;
+          if (!effective) continue;
 
-        if (scope === "decision") {
-          this.applyDecisionScope(aiConfig, effective, true);
-        } else if (scope === "editing" || scope === "agent") {
-          const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
+          if (scope === "decision") {
+            this.applyDecisionScope(aiConfig, effective, true);
+          } else if (scope === "editing" || scope === "agent") {
+            const targetModelId = this.upsertProviderAndModel(aiConfig, effective, providers);
 
-          if (scope === "agent") {
-            this.applyAgentParams(aiConfig, effective, targetModelId);
-          }
+            if (scope === "agent") {
+              this.applyAgentParams(aiConfig, effective, targetModelId);
+            }
 
-          if (scope === "editing") {
-            this.applyEditingParams(aiConfig, effective, targetModelId);
-            // 同步旧版兼容字段 openAI
-            this.syncLegacyOpenAi(aiConfig, effective);
+            if (scope === "editing") {
+              this.applyEditingParams(aiConfig, effective, targetModelId);
+              // 同步旧版兼容字段 openAI
+              this.syncLegacyOpenAi(aiConfig, effective);
+            }
           }
         }
-      }
 
-      const success = await this.setSystemAiConfig(aiConfig);
-      if (success) {
-        this.log(`Successfully batch updated Siyuan system AI for scopes: ${tasks.map(t => t.scope).join(", ")}`);
-        return true;
+        const success = await this.setSystemAiConfig(aiConfig);
+        if (success) {
+          this.log(`Successfully batch updated Siyuan system AI for scopes: ${tasks.map(t => t.scope).join(", ")}`);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        this.logError("Error updating Siyuan system AI batch", err);
+        return false;
       }
-      return false;
-    } catch (err) {
-      this.logError("Error updating Siyuan system AI batch", err);
-      return false;
-    }
+    });
   }
 
   exportSiyuanAiJson(
