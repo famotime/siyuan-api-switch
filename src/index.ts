@@ -8,6 +8,7 @@ import { destroy, init } from '@/main'
 import { apiSwitchCore, STORAGE_KEY } from "@/services/api-switch-core";
 import { DEBUG_SETTINGS_KEY } from "@/constants/debug";
 import { SyFrontendTypes } from "@/types";
+import { t } from "@/utils/i18n";
 
 const {
   version,
@@ -55,7 +56,7 @@ export default class ApiSwitchPlugin extends Plugin {
     // 注册工具栏顶栏图标，点击后打开统一入口
     this.addTopBar({
       icon: "iconSparkles",
-      title: "API 旋钮",
+      title: this.i18n?.topBarTitle || t("topBarTitle"),
       position: "right",
       callback: () => {
         this.openSetting();

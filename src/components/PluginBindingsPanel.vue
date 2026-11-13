@@ -1,7 +1,7 @@
 <template>
   <div class="binding-container">
     <div class="content-header">
-      <h2>接管配置：{{ plugin.displayName }}</h2>
+      <h2>{{ t('takeoverConfig') }}{{ plugin.displayName }}</h2>
       <p class="subtitle">{{ plugin.pluginId }}</p>
     </div>
 
@@ -14,13 +14,13 @@
           style="margin-bottom: 16px;"
         >
           <div class="status-title">
-            当前接管状态: 
-            <strong v-if="plugin.bindingState === 'full'">全部槽位已接管</strong>
-            <strong v-else-if="plugin.bindingState === 'partial'">部分槽位已接管 ({{ plugin.boundSlotsCount }}/{{ plugin.totalSlotsCount }})</strong>
-            <strong v-else>独立配置 (全部未接管)</strong>
+            {{ t('currentTakeoverStatus') }}
+            <strong v-if="plugin.bindingState === 'full'">{{ t('allSlotsBound') }}</strong>
+            <strong v-else-if="plugin.bindingState === 'partial'">{{ t('partialSlotsBound', { bound: plugin.boundSlotsCount ?? 0, total: plugin.totalSlotsCount ?? 0 }) }}</strong>
+            <strong v-else>{{ t('allSlotsUnbound') }}</strong>
           </div>
           <div class="status-desc">
-            该插件支持双模型/多槽位配置。您可以为每个槽位独立绑定 API Profile 或使用插件本地配置。
+            {{ t('multiSlotsDesc') }}
           </div>
         </div>
 
@@ -37,7 +37,7 @@
               <span v-if="slot.description" style="font-size: 12px; font-weight: normal; opacity: 0.7;">({{ slot.description }})</span>
             </div>
             <span :class="['status-badge', slot.isBound ? 'bound' : 'unbound']">
-              {{ slot.isBound ? '已接管' : '独立配置' }}
+              {{ slot.isBound ? t('bound') : t('unbound') }}
             </span>
           </div>
 
@@ -48,30 +48,30 @@
             style="margin-bottom: 12px; padding: 10px; border-radius: 6px; background: rgba(0, 0, 0, 0.03);"
           >
             <div class="import-card-title" style="font-size: 12px; font-weight: 600;">
-              💡 检测到该槽位本地参数：服务商 <strong>{{ getProviderName(slot.localConfig.provider) }}</strong> | 模型 <strong>{{ slot.localConfig.model || '未指定' }}</strong>
+              {{ t('detectedLocalParam', { provider: getProviderName(slot.localConfig.provider), model: slot.localConfig.model || t('unspecified') }) }}
             </div>
             <div
               v-if="slot.matchedProfileName"
               class="matched-profile-hint"
               style="margin-top: 6px; padding: 4px 8px; background: rgba(54, 163, 247, 0.12); border-left: 3px solid #36a3f7; border-radius: 4px; font-size: 12px;"
             >
-              ✨ 检测到与已有场景配置 <strong>「{{ slot.matchedProfileName }}」</strong> 一致，点击直接复用绑定
+              {{ t('matchedProfileHint', { name: slot.matchedProfileName }) }}
             </div>
             <button
               class="b3-button b3-button--primary import-action-btn"
               style="margin-top: 8px; padding: 4px 10px; font-size: 11px; height: auto;"
               @click="$emit('importLocalConfig', plugin.pluginId, slot.slotId)"
             >
-              <span v-if="slot.matchedProfileName">🔗 直接绑定「{{ slot.matchedProfileName }}」</span>
-              <span v-else>📥 一键导入为 Profile 并接管</span>
+              <span v-if="slot.matchedProfileName">{{ t('bindExistingProfile', { name: slot.matchedProfileName }) }}</span>
+              <span v-else>{{ t('importAsProfileAndTakeover') }}</span>
             </button>
           </div>
 
           <!-- 槽位 Profile 绑定下拉框 -->
           <div class="form-group binding-select-group" style="margin-bottom: 0;">
-            <label style="font-size: 12px; margin-bottom: 4px; display: block; opacity: 0.85;">绑定 API 配置文件 (Profile)</label>
+            <label style="font-size: 12px; margin-bottom: 4px; display: block; opacity: 0.85;">{{ t('bindProfileLabel') }}</label>
             <select class="b3-select select-lg" :value="slot.boundProfileId" @change="onSlotSelectChange(slot.slotId, $event)">
-              <option value="">❌ 独立配置 (不接管此槽位)</option>
+              <option value="">{{ t('doNotTakeoverSlot') }}</option>
               <option v-for="prof in profiles" :key="prof.id" :value="prof.id">
                 🔗 {{ prof.name }} ({{ getProviderName(prof.provider) }} | {{ prof.model }})
               </option>
@@ -84,44 +84,40 @@
       <div v-else class="single-slot-container">
         <div class="card-status-info" :class="plugin.isBound ? 'bound-card' : 'unbound-card'">
           <div class="status-title">
-            当前接管状态: <strong>{{ plugin.isBound ? '已接管' : '独立配置 (未接管)' }}</strong>
+            {{ t('currentTakeoverStatus') }}<strong>{{ plugin.isBound ? t('bound') : t('unbound') }}</strong>
           </div>
           <div class="status-desc">
-            {{ plugin.isBound 
-              ? '当前子插件的通用 AI API 配置由 API 旋钮接管。子插件原配置面板的相应字段已置灰只读。' 
-              : '当前子插件独立运行，使用其自身的配置面板所保存的 API 配置。' }}
+            {{ plugin.isBound ? t('boundDesc') : t('unboundDesc') }}
           </div>
         </div>
 
         <div v-if="!plugin.isBound && plugin.localConfig && (plugin.localConfig.baseUrl || plugin.localConfig.apiKey || plugin.localConfig.model)" class="local-config-import-card animate-fade-in" style="margin-bottom: 16px;">
           <div class="import-card-title">
-            💡 检测到该{{ plugin.pluginId.startsWith(SIYUAN_BUILTIN_PREFIX) ? '系统模块' : '插件' }}已有配置与高级参数
+            {{ t('detectedLocalConfigTitle', { type: plugin.pluginId.startsWith(SIYUAN_BUILTIN_PREFIX) ? t('systemModule') : t('pluginWord') }) }}
           </div>
           <div class="import-card-desc" style="margin-top: 6px; line-height: 1.6;">
-            <div>基础参数：服务商 <strong>{{ getProviderName(plugin.localConfig.provider) }}</strong> | 模型 <strong>{{ plugin.localConfig.model || '未指定' }}</strong> | 地址 <code>{{ plugin.localConfig.baseUrl || '无' }}</code></div>
+            <div>{{ t('baseParams', { provider: getProviderName(plugin.localConfig.provider), model: plugin.localConfig.model || t('unspecified'), url: plugin.localConfig.baseUrl || t('none') }) }}</div>
             <div style="margin-top: 4px; font-size: 12px; opacity: 0.9;">
-              高级参数：超时 <strong>{{ plugin.localConfig.requestTimeoutSeconds ?? 30 }}s</strong> | 
-              温度 <strong>{{ plugin.localConfig.temperature ?? 0.7 }}</strong> | 
-              Max Tokens <strong>{{ plugin.localConfig.maxTokens ? plugin.localConfig.maxTokens : '不限(0)' }}</strong>
-              <span v-if="(plugin.localConfig as any).maxHistoryMessages !== undefined"> | 上下文 <strong>{{ (plugin.localConfig as any).maxHistoryMessages }} 轮</strong></span>
-              <span v-if="(plugin.localConfig as any).maxToolCallRounds !== undefined"> | 工具调用 <strong>{{ (plugin.localConfig as any).maxToolCallRounds }} 轮</strong></span>
-              <span v-if="(plugin.localConfig as any).sessionTimeout !== undefined"> | 会话超时 <strong>{{ (plugin.localConfig as any).sessionTimeout }}s</strong></span>
-              <span v-if="(plugin.localConfig as any).streamIdleTimeout !== undefined"> | 流空闲超时 <strong>{{ (plugin.localConfig as any).streamIdleTimeout }}s</strong></span>
+              {{ t('advancedParams', { timeout: plugin.localConfig.requestTimeoutSeconds ?? 30, temp: plugin.localConfig.temperature ?? 0.7, maxTokens: plugin.localConfig.maxTokens ? plugin.localConfig.maxTokens : t('unlimited') }) }}
+              <span v-if="(plugin.localConfig as any).maxHistoryMessages !== undefined">{{ t('contextRounds', { rounds: (plugin.localConfig as any).maxHistoryMessages }) }}</span>
+              <span v-if="(plugin.localConfig as any).maxToolCallRounds !== undefined">{{ t('toolCallRounds', { rounds: (plugin.localConfig as any).maxToolCallRounds }) }}</span>
+              <span v-if="(plugin.localConfig as any).sessionTimeout !== undefined">{{ t('sessionTimeoutParam', { sec: (plugin.localConfig as any).sessionTimeout }) }}</span>
+              <span v-if="(plugin.localConfig as any).streamIdleTimeout !== undefined">{{ t('streamIdleTimeoutParam', { sec: (plugin.localConfig as any).streamIdleTimeout }) }}</span>
             </div>
           </div>
           <div v-if="plugin.matchedProfileName" class="matched-profile-hint" style="margin-top: 8px; padding: 6px 10px; background: rgba(54, 163, 247, 0.12); border-left: 3px solid #36a3f7; border-radius: 4px; font-size: 12px; color: var(--b3-theme-on-surface);">
-            ✨ 检测到与已有场景配置 <strong>「{{ plugin.matchedProfileName }}」</strong> 一致，点击将直接复用绑定，避免生成重复配置
+            {{ t('matchedProfilePluginHint', { name: plugin.matchedProfileName }) }}
           </div>
           <button class="b3-button b3-button--primary import-action-btn" style="margin-top: 10px; padding: 4px 10px; font-size: 11px; height: auto;" @click="$emit('importLocalConfig', plugin.pluginId)">
-            <span v-if="plugin.matchedProfileName">🔗 直接绑定已有配置「{{ plugin.matchedProfileName }}」并接管</span>
-            <span v-else>📥 一键导入为 Profile 并接管</span>
+            <span v-if="plugin.matchedProfileName">{{ t('bindExistingProfileAndTakeover', { name: plugin.matchedProfileName }) }}</span>
+            <span v-else>{{ t('importAsProfileAndTakeover') }}</span>
           </button>
         </div>
 
         <div class="form-group binding-select-group">
-          <label>绑定 API 配置文件 (Profile)</label>
+          <label>{{ t('bindProfileLabel') }}</label>
           <select class="b3-select select-lg" :value="plugin.boundProfileId" @change="onSelectChange($event)">
-            <option value="">❌ 独立配置 (不接管此插件)</option>
+            <option value="">{{ t('doNotTakeoverPlugin') }}</option>
             <option v-for="prof in profiles" :key="prof.id" :value="prof.id">
               🔗 {{ prof.name }} ({{ getProviderName(prof.provider) }} | {{ prof.model }})
             </option>
@@ -130,14 +126,14 @@
       </div>
 
       <div class="binding-tips" v-if="plugin.boundProfileId || (plugin.slots && plugin.slots.some(s => s.isBound))">
-        <h3>接管字段包括：</h3>
+        <h3>{{ t('takeoverFieldsTitle') }}</h3>
         <ul>
-          <li>API Base URL 和 API Key</li>
-          <li>默认 Model 模型名称</li>
-          <li>请求超时时间 (Timeout)</li>
-          <li>Temperature 采样温度与 Max Tokens 限制</li>
+          <li>{{ t('takeoverField1') }}</li>
+          <li>{{ t('takeoverField2') }}</li>
+          <li>{{ t('takeoverField3') }}</li>
+          <li>{{ t('takeoverField4') }}</li>
         </ul>
-        <p class="warning-text">💡 提示：绑定完成后，AI 请求与思源原生系统配置将自动联动生效，无需手动写回或重启插件。</p>
+        <p class="warning-text">{{ t('takeoverNotice') }}</p>
       </div>
     </div>
   </div>
@@ -146,6 +142,8 @@
 <script setup lang="ts">
 import { RegisteredPluginInfo, ApiProfile } from "@/services/api-switch-core";
 import { SIYUAN_BUILTIN_PREFIX } from "@/constants/siyuan-scopes";
+import { PRESET_PROVIDERS } from "@/constants/providers";
+import { t } from "@/utils/i18n";
 
 defineProps<{
   plugin: RegisteredPluginInfo;
@@ -158,15 +156,13 @@ const emit = defineEmits<{
 }>();
 
 const getProviderName = (provider: string) => {
+  const preset = PRESET_PROVIDERS[provider];
+  if (preset) return preset.displayName;
   const dict: Record<string, string> = {
-    deepseek: "DeepSeek",
-    gemini: "Google Gemini",
-    siliconflow: "SiliconFlow",
-    openai: "OpenAI",
-    custom: "自定义",
-    systemone: "Jev 决策模型",
+    custom: t("custom"),
+    systemone: t("protoSystemOne"),
   };
-  return dict[provider] || provider || "未知";
+  return dict[provider] || provider || t("unknown");
 };
 
 const onSelectChange = (e: Event) => {

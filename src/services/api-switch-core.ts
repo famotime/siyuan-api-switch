@@ -7,8 +7,8 @@ import { PluginBindingManager, RegisteredPluginInfo } from "./plugin-binding-man
 import { SiyuanAdapter, extractSiyuanAiSettings, SiyuanExtractedAiInfo, cleanRawProviderDisplayName, resolveProviderDisplayName } from "./siyuan-adapter";
 import { extractApiKey, extractBaseUrl, extractModelName } from "@/utils/siyuan-crypto";
 import { normalizeAiProtocol } from "@/utils/protocol";
-import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo } from "@/constants/providers";
-import { SIYUAN_BUILTIN_EDITING, SIYUAN_BUILTIN_AGENT, SIYUAN_BUILTIN_DECISION } from "@/constants/siyuan-scopes";
+import { PRESET_PROVIDERS, PRESET_PROVIDER_LIST, PresetProviderInfo, SYSTEMONE_DECISION_ENDPOINT, SYSTEMONE_DECISION_DEFAULT_MODEL } from "@/constants/providers";
+import { SIYUAN_BUILTIN_PREFIX, SIYUAN_BUILTIN_EDITING, SIYUAN_BUILTIN_AGENT, SIYUAN_BUILTIN_DECISION } from "@/constants/siyuan-scopes";
 import { DEBUG_SETTINGS_KEY } from "@/constants/debug";
 import { genProviderId, genProfileId } from "@/utils/id";
 import { computeDefaultProfileName } from "@/utils/profile-naming";
@@ -763,9 +763,9 @@ export class ApiSwitchCore {
         if (exist) {
           exist.provider = "custom";
           exist.protocol = "custom";
-          exist.baseUrl = extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone";
+          exist.baseUrl = extracted.decision.baseUrl || SYSTEMONE_DECISION_ENDPOINT;
           exist.apiKey = extracted.decision.apiKey;
-          exist.model = extracted.decision.model || "jev-latest";
+          exist.model = extracted.decision.model || SYSTEMONE_DECISION_DEFAULT_MODEL;
           if (!exist.models?.includes(exist.model)) {
             exist.models = [...(exist.models || []), exist.model];
           }
@@ -780,10 +780,10 @@ export class ApiSwitchCore {
             name: "思源-决策模型",
             provider: "custom",
             protocol: "custom",
-            baseUrl: extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone",
+            baseUrl: extracted.decision.baseUrl || SYSTEMONE_DECISION_ENDPOINT,
             apiKey: extracted.decision.apiKey,
-            model: extracted.decision.model || "jev-latest",
-            models: [extracted.decision.model || "jev-latest"],
+            model: extracted.decision.model || SYSTEMONE_DECISION_DEFAULT_MODEL,
+            models: [extracted.decision.model || SYSTEMONE_DECISION_DEFAULT_MODEL],
             requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds ?? 30,
             isDecisionModel: true,
             memo: "从思源笔记「设置-人工智能-决策模型」同步的配置",
@@ -977,10 +977,10 @@ export class ApiSwitchCore {
             name: "思源-决策模型",
             provider: "custom",
             protocol: "custom",
-            baseUrl: extracted.decision.baseUrl || "https://api.typesafe.ai/v1/systemone",
+            baseUrl: extracted.decision.baseUrl || SYSTEMONE_DECISION_ENDPOINT,
             apiKey: extracted.decision.apiKey,
-            model: extracted.decision.model || "jev-latest",
-            models: [extracted.decision.model || "jev-latest"],
+            model: extracted.decision.model || SYSTEMONE_DECISION_DEFAULT_MODEL,
+            models: [extracted.decision.model || SYSTEMONE_DECISION_DEFAULT_MODEL],
             requestTimeoutSeconds: extracted.decision.requestTimeoutSeconds ?? 30,
             isDecisionModel: true,
             memo: "从原生 ai.json 导入的决策模型配置",
@@ -1350,7 +1350,7 @@ export class ApiSwitchCore {
         await this.updateSiyuanSystemAi(profile, "agent");
       } else if (pluginId === SIYUAN_BUILTIN_DECISION) {
         await this.updateSiyuanSystemAi(profile, "decision");
-      } else if (pluginId === "siyuan_builtin") {
+      } else if (pluginId === SIYUAN_BUILTIN_PREFIX) {
         await this.updateSiyuanSystemAi(profile, "all");
       }
     }
@@ -1376,7 +1376,7 @@ export class ApiSwitchCore {
             this.updateSiyuanSystemAi(profile, "agent");
           } else if (key === SIYUAN_BUILTIN_DECISION) {
             this.updateSiyuanSystemAi(profile, "decision");
-          } else if (key === "siyuan_builtin") {
+          } else if (key === SIYUAN_BUILTIN_PREFIX) {
             this.updateSiyuanSystemAi(profile, "all");
           }
         }

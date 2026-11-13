@@ -2,6 +2,7 @@
  * 思源笔记专属 API 密钥加解密与提取工具
  * 对应思源内核 kernel/util/crypt.go 与 kernel/conf/ai.go
  */
+import { SYSTEMONE_DECISION_ENDPOINT, SYSTEMONE_DECISION_DEFAULT_MODEL } from "@/constants/providers";
 
 // 思源笔记内核内置的 AES 加密固定密钥与初始向量
 const SIYUAN_SK = "696D897C9AA0611B";
@@ -82,7 +83,7 @@ export function extractApiKey(obj: any): string {
  */
 export function extractBaseUrl(obj: any, isDecision = false): string {
   if (!obj || typeof obj !== "object") {
-    return isDecision ? "https://api.typesafe.ai/v1/systemone" : "";
+    return isDecision ? SYSTEMONE_DECISION_ENDPOINT : "";
   }
   const url =
     obj.endpoint ||
@@ -95,7 +96,7 @@ export function extractBaseUrl(obj: any, isDecision = false): string {
   if (typeof url === "string" && url.trim()) {
     return url.trim();
   }
-  return isDecision ? "https://api.typesafe.ai/v1/systemone" : "";
+  return isDecision ? SYSTEMONE_DECISION_ENDPOINT : "";
 }
 
 /**
@@ -103,11 +104,11 @@ export function extractBaseUrl(obj: any, isDecision = false): string {
  */
 export function extractModelName(obj: any, isDecision = false): string {
   if (!obj || typeof obj !== "object") {
-    return isDecision ? "jev-latest" : "";
+    return isDecision ? SYSTEMONE_DECISION_DEFAULT_MODEL : "";
   }
   const name = obj.name || obj.model || obj.modelId || obj.id || "";
   if (typeof name === "string" && name.trim()) {
     return name.trim();
   }
-  return isDecision ? "jev-latest" : "";
+  return isDecision ? SYSTEMONE_DECISION_DEFAULT_MODEL : "";
 }

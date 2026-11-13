@@ -273,5 +273,25 @@ describe("extractSiyuanAiSettings 与提供商名称净化", () => {
       expect(res.providers[1].displayName).toBe("DeepSeek");
       expect(res.providers[2].displayName).toBe("StepFun");
     });
+
+    it("rawProviders 包含 null/undefined/非法数据时安全过滤不崩溃", () => {
+      const raw = {
+        providers: [
+          null,
+          undefined,
+          "invalid",
+          {
+            id: "p-valid",
+            displayName: "DeepSeek",
+            baseURL: "https://api.deepseek.com",
+            apiKey: "key",
+            models: [{ id: "deepseek-chat", name: "deepseek-chat" }],
+          },
+        ],
+      };
+      const res = extractSiyuanAiSettings(raw);
+      expect(res.providers).toHaveLength(1);
+      expect(res.providers[0].id).toBe("p-valid");
+    });
   });
 });

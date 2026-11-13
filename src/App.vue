@@ -14,7 +14,7 @@
         <div class="dialog-header" @mousedown="onHeaderMouseDown" @dblclick="toggleMaximize">
           <div class="header-title">
             <svg class="header-icon" viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
-            <span>API 旋钮 (siyuan-api-switch)</span>
+            <span>{{ t('appTitle') }}</span>
           </div>
           <div class="header-actions">
             <!-- 业务同步操作组 -->
@@ -29,7 +29,7 @@
               <button 
                 class="header-sync-btn header-sync-btn--action" 
                 @click="triggerImport" 
-                data-tooltip="全量导入配置（智能去重）" 
+                :data-tooltip="t('importTooltip')" 
                 data-tooltip-position="bottom"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -37,12 +37,12 @@
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                <span>导入</span>
+                <span>{{ t('import') }}</span>
               </button>
               <button 
                 class="header-sync-btn header-sync-btn--action" 
                 @click="exportBackupAction" 
-                data-tooltip="全量导出提供商与 API 配置" 
+                :data-tooltip="t('exportTooltip')" 
                 data-tooltip-position="bottom"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -50,12 +50,12 @@
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                <span>导出</span>
+                <span>{{ t('export') }}</span>
               </button>
               <button 
                 class="header-sync-btn header-sync-btn--read" 
                 @click="syncFromSiyuanAction" 
-                data-tooltip="从思源读取 AI 配置并同步" 
+                :data-tooltip="t('readSiyuanConfigTooltip')" 
                 data-tooltip-position="bottom"
               >
                 <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -63,7 +63,7 @@
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                <span>读取思源配置</span>
+                <span>{{ t('readSiyuanConfig') }}</span>
               </button>
             </div>
 
@@ -72,11 +72,11 @@
 
             <!-- 窗口控制组 -->
             <div class="header-window-group">
-              <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? '还原窗口' : '最大化窗口'" data-tooltip-position="bottom">
+              <button class="header-btn" @click="toggleMaximize" :data-tooltip="isMaximized ? t('restoreWindow') : t('maximizeWindow')" data-tooltip-position="bottom">
                 <svg v-if="!isMaximized" viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" style="fill:none!important"></rect></svg>
                 <svg v-else viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20" style="fill:none!important"></polyline><polyline points="20 10 14 10 14 4" style="fill:none!important"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
               </button>
-              <button class="close-btn" @click="handleCloseDialog" data-tooltip="关闭窗口" data-tooltip-position="bottom">
+              <button class="close-btn" @click="handleCloseDialog" :data-tooltip="t('closeWindow')" data-tooltip-position="bottom">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
@@ -108,13 +108,13 @@
                 <div class="section-title">
                   <div class="title-text">
                     <span class="title-indicator"></span>
-                    <span>API 提供商 (Providers)</span>
+                    <span>{{ t('sidebarProviders') }}</span>
                   </div>
                   <div class="title-actions">
                     <button 
                       class="title-action-btn" 
                       @click="createNewProvider" 
-                      data-tooltip="添加新提供商" 
+                      :data-tooltip="t('addNewProvider')" 
                       data-tooltip-position="bottom"
                     >
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -130,14 +130,14 @@
                   >
                     <div class="profile-item-meta">
                       <div class="profile-item-name">{{ prov.displayName }}</div>
-                      <div class="profile-item-sub">{{ prov.protocol || 'openai' }} | {{ (prov.models && prov.models.length) || 0 }} 个模型</div>
+                      <div class="profile-item-sub">{{ prov.protocol || 'openai' }} | {{ t('modelsCount', { count: (prov.models && prov.models.length) || 0 }) }}</div>
                     </div>
-                    <button class="profile-quick-delete" @click.stop="quickDeleteProvider(prov)" data-tooltip="删除提供商" data-tooltip-position="left">
+                    <button class="profile-quick-delete" @click.stop="quickDeleteProvider(prov)" :data-tooltip="t('deleteProviderTooltip')" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                   </div>
                   <div v-if="providers.length === 0" class="empty-list">
-                    暂无提供商，点击 + 或从思源同步
+                    {{ t('emptyProviders') }}
                   </div>
                 </div>
               </div>
@@ -147,13 +147,13 @@
                 <div class="section-title">
                   <div class="title-text">
                     <span class="title-indicator"></span>
-                    <span>API 配置文件 (Profiles)</span>
+                    <span>{{ t('sidebarProfiles') }}</span>
                   </div>
                   <div class="title-actions">
                     <button 
                       class="title-action-btn" 
                       @click="createNewProfile" 
-                      data-tooltip="添加新配置" 
+                      :data-tooltip="t('addNewProfile')" 
                       data-tooltip-position="bottom"
                     >
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -170,21 +170,21 @@
                     <div class="profile-item-meta">
                       <div class="profile-item-name">
                         <span>{{ prof.name }}</span>
-                        <span v-if="prof.isDecisionModel" class="profile-badge decision-badge">决策模型</span>
-                        <span v-else-if="prof.name.includes('编辑器')" class="profile-badge builtin-badge">思源编辑器</span>
-                        <span v-else-if="prof.name.includes('智能体')" class="profile-badge builtin-badge">思源智能体</span>
+                        <span v-if="prof.isDecisionModel" class="profile-badge decision-badge">{{ t('decisionModelBadge') }}</span>
+                        <span v-else-if="prof.name.includes('编辑器') || prof.name.toLowerCase().includes('editor')" class="profile-badge builtin-badge">{{ t('siyuanEditorBadge') }}</span>
+                        <span v-else-if="prof.name.includes('智能体') || prof.name.toLowerCase().includes('agent')" class="profile-badge builtin-badge">{{ t('siyuanAgentBadge') }}</span>
                       </div>
                       <div class="profile-item-sub">{{ getProfileDisplaySub(prof) }}</div>
                     </div>
-                    <button class="profile-quick-apply" @click.stop="applyProfileToAll(prof)" data-tooltip="应用到所有接管项目" data-tooltip-position="left">
+                    <button class="profile-quick-apply" @click.stop="applyProfileToAll(prof)" :data-tooltip="t('applyToAllTooltip')" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" style="fill:none!important"></polygon></svg>
                     </button>
-                    <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" data-tooltip="删除配置" data-tooltip-position="left">
+                    <button class="profile-quick-delete" @click.stop="quickDeleteProfile(prof)" :data-tooltip="t('deleteProfileTooltip')" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" style="fill:none!important"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                     </button>
                   </div>
                   <div v-if="profiles.length === 0" class="empty-list">
-                    暂无 API 配置，点击上方 + 创建
+                    {{ t('emptyProfiles') }}
                   </div>
                 </div>
               </div>
@@ -194,7 +194,7 @@
                 <div class="section-title">
                   <div class="title-text">
                     <span class="title-indicator"></span>
-                    <span>子插件接管 (Bindings)</span>
+                    <span>{{ t('sidebarBindings') }}</span>
                   </div>
                 </div>
                 <div class="plugin-list">
@@ -208,26 +208,26 @@
                       <div class="plugin-item-header">
                         <span class="plugin-name">{{ plug.displayName }}</span>
                         <span :class="['status-badge', plug.bindingState === 'partial' ? 'partial' : (plug.isBound ? 'bound' : 'unbound')]">
-                          {{ plug.bindingState === 'partial' ? '部分接管' : (plug.isBound ? '已接管' : '独立配置') }}
+                          {{ plug.bindingState === 'partial' ? t('partialTakeover') : (plug.isBound ? t('takeoverActive') : t('standaloneConfig')) }}
                         </span>
                       </div>
                       <div class="plugin-sub text-truncate" :title="getPluginSubTooltip(plug)">{{ getPluginSubLine(plug) }}</div>
                     </div>
-                    <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" data-tooltip="解除接管" data-tooltip-position="left">
+                    <button v-if="plug.isBound" class="plugin-quick-unbind" @click.stop="quickUnbindPlugin(plug)" :data-tooltip="t('unbindTooltip')" data-tooltip-position="left">
                       <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.77A4 4 0 0 0 20 10a4 4 0 0 0-4-4h-4a4 4 0 0 0-4 4M5.16 11.23A4 4 0 0 0 4 14a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4" style="fill:none!important"></path><line x1="2" y1="2" x2="22" y2="22"></line></svg>
                     </button>
                   </div>
                   <div v-if="registeredPlugins.length === 0" class="empty-list">
-                    暂无活跃的兼容子插件
+                    {{ t('emptyPlugins') }}
                   </div>
                 </div>
               </div>
             </div>
             
             <div class="sidebar-footer">
-              <label class="log-switch-label" title="开启后，在删除配置或同步过程中若遇到异常，会弹窗提示详细堆栈">
+              <label class="log-switch-label" :title="t('enableDebugLogTitle')">
                 <input type="checkbox" v-model="enableDebugLog" @change="saveLogSetting" />
-                <span>启用日志调试</span>
+                <span>{{ t('enableDebugLog') }}</span>
               </label>
             </div>
           </div>
@@ -269,8 +269,8 @@
             <!-- 场景四：空白状态 -->
             <div v-else class="empty-content">
               <svg class="welcome-icon" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" style="fill:none!important"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" style="fill:none!important"></path></svg>
-              <h2>欢迎使用 API 旋钮</h2>
-              <p>左侧点击「+」可以创建多套不同的 AI 供应商配置。选择接管子插件，实现一键共享、无缝切换模型与供应商。</p>
+              <h2>{{ t('welcomeTitle') }}</h2>
+              <p>{{ t('welcomeDesc') }}</p>
 
               <!-- 快捷导入思源配置卡片 -->
               <div v-if="hasSiyuanBuiltInAi" class="siyuan-import-card animate-fade-in">
@@ -278,10 +278,10 @@
                   <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" style="fill:none!important"></path><polyline points="7 10 12 15 17 10" style="fill:none!important"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </div>
                 <div class="card-content">
-                  <div class="card-title">检测到思源笔记已配置内置 AI</div>
-                  <div class="card-desc">自动读取思源笔记「设置 -> AI」中配置的信息：{{ siyuanBuiltInAiInfo }}。</div>
+                  <div class="card-title">{{ t('detectedSiyuanAiTitle') }}</div>
+                  <div class="card-desc">{{ t('detectedSiyuanAiDesc', { info: siyuanBuiltInAiInfo }) }}</div>
                   <button class="b3-button b3-button--primary import-action-btn" @click="importSiyuanBuiltInAi">
-                    一键导入并创建 Profile
+                    {{ t('importSiyuanBuiltinBtn') }}
                   </button>
                 </div>
               </div>
@@ -339,6 +339,7 @@ import ProviderEditPanel from "@/components/ProviderEditPanel.vue"
 import ProfileEditPanel from "@/components/ProfileEditPanel.vue"
 import PluginBindingsPanel from "@/components/PluginBindingsPanel.vue"
 import ProviderPresetPicker from "@/components/ProviderPresetPicker.vue"
+import { t } from "@/utils/i18n"
 
 // 调试日志开关
 const STORAGE_KEY_DEBUG = DEBUG_SETTINGS_KEY
@@ -436,8 +437,8 @@ const confirmDialog = ref<{
   show: false,
   title: "",
   text: "",
-  confirmText: "确定",
-  cancelText: "取消",
+  confirmText: t('confirm'),
+  cancelText: t('cancel'),
   onConfirm: () => {},
   onCancel: undefined,
 })
@@ -452,8 +453,8 @@ const showCustomConfirm = (
       show: true,
       title: titleOrOptions.title,
       text: titleOrOptions.text,
-      confirmText: titleOrOptions.confirmText || '确定',
-      cancelText: titleOrOptions.cancelText || '取消',
+      confirmText: titleOrOptions.confirmText || t('confirm'),
+      cancelText: titleOrOptions.cancelText || t('cancel'),
       onConfirm: titleOrOptions.onConfirm,
       onCancel: titleOrOptions.onCancel,
     }
@@ -462,8 +463,8 @@ const showCustomConfirm = (
       show: true,
       title: titleOrOptions,
       text: text || '',
-      confirmText: '确定',
-      cancelText: '取消',
+      confirmText: t('confirm'),
+      cancelText: t('cancel'),
       onConfirm: onConfirm || (() => {}),
       onCancel: undefined,
     }
@@ -508,12 +509,12 @@ const handleSafeNavigate = (navigateAction: () => void | Promise<void>) => {
     return
   }
 
-  const typeName = type === 'provider' ? 'API 提供商' : 'API 配置'
+  const typeName = type === 'provider' ? t('typeProvider') : t('typeProfile')
   showCustomConfirm({
-    title: "未保存修改",
-    text: `当前 ${typeName} 有未保存的改动，是否在离开前保存？`,
-    confirmText: "保存",
-    cancelText: "放弃",
+    title: t('unsavedChangesTitle'),
+    text: t('unsavedChangesText', { type: typeName }),
+    confirmText: t('save'),
+    cancelText: t('discard'),
     onConfirm: async () => {
       let saved = false
       if (type === 'provider') {
@@ -638,7 +639,7 @@ const createProviderFromPreset = (presetId: string) => {
       // 自定义：进入空白表单
       editingProvider.value = {
         id: "",
-        displayName: "新 API 提供商",
+        displayName: t('newProviderDefaultName'),
         enabled: true,
         protocol: "openai",
         baseUrl: "",
@@ -726,8 +727,8 @@ const selectPlugin = (id: string) => {
 // 提供商保存与删除
 const saveProvider = async (providerData: ApiProvider, skipReselect = false): Promise<boolean> => {
   if (!providerData.displayName.trim() || !providerData.baseUrl.trim()) {
-    showMessage("请填写提供商名称与 Base URL", 5000, "error")
-    showToast("请填写提供商名称与 Base URL", "error")
+    showMessage(t('fillProviderRequired'), 5000, "error")
+    showToast(t('fillProviderRequired'), "error")
     return false
   }
   providerData.providerUrl = (providerData.providerUrl || "").trim()
@@ -744,8 +745,8 @@ const saveProvider = async (providerData: ApiProvider, skipReselect = false): Pr
     }
 
     refreshData()
-    showMessage("提供商配置已保存", 3000, "info")
-    showToast("提供商配置已保存", "success")
+    showMessage(t('saveProviderSuccess'), 3000, "info")
+    showToast(t('saveProviderSuccess'), "success")
     providerPanelRef.value?.resetDirty?.()
 
     if (!skipReselect && targetId) {
@@ -756,14 +757,15 @@ const saveProvider = async (providerData: ApiProvider, skipReselect = false): Pr
     })
     return true
   } catch (err: any) {
-    showMessage(`保存提供商失败: ${err?.message || err}`, 5000, "error")
-    showToast(`保存提供商失败: ${err?.message || err}`, "error")
+    const errorMsg = t('saveProviderFailed', { error: err?.message || err })
+    showMessage(errorMsg, 5000, "error")
+    showToast(errorMsg, "error")
     return false
   }
 }
 
 const deleteProvider = (id: string) => {
-  showCustomConfirm("删除提供商", "确定要删除此 API 提供商吗？关联此提供商的 Profile 将解除关联。", async () => {
+  showCustomConfirm(t('deleteProviderConfirmTitle'), t('deleteProviderConfirmText'), async () => {
     try {
       providerPanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProvider(id)
@@ -804,8 +806,8 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
   }
 
   if (!profileData.name.trim() || !profileData.model.trim()) {
-    showMessage("请填写配置名称与模型名称", 5000, "error")
-    showToast("请填写配置名称与模型名称", "error")
+    showMessage(t('fillProfileRequired'), 5000, "error")
+    showToast(t('fillProfileRequired'), "error")
     return false
   }
 
@@ -814,8 +816,8 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
   const effectiveBaseUrl = profileData.baseUrl?.trim() || defaultBaseUrl
 
   if (!profileData.providerId && (!effectiveBaseUrl || !profileData.apiKey?.trim())) {
-    showMessage("独立配置必须填写 API 密钥与基础 URL", 5000, "error")
-    showToast("独立配置必须填写 API 密钥与基础 URL", "error")
+    showMessage(t('fillStandaloneRequired'), 5000, "error")
+    showToast(t('fillStandaloneRequired'), "error")
     return false
   }
 
@@ -838,15 +840,15 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
     if (autoRes) {
       const provName = autoRes.provider.displayName
       if (autoRes.action === "created") {
-        showMessage(`API 配置已保存，并已自动生成提供商「${provName}」`, 4000, "info")
-        showToast(`API 配置已保存（已生成「${provName}」）`, "success")
+        showMessage(t('saveProfileCreatedProvider', { name: provName }), 4000, "info")
+        showToast(t('saveProfileCreatedProviderToast', { name: provName }), "success")
       } else {
-        showMessage(`API 配置已保存，并已关联至已有提供商「${provName}」`, 4000, "info")
-        showToast(`API 配置已保存（已关联「${provName}」）`, "success")
+        showMessage(t('saveProfileLinkedProvider', { name: provName }), 4000, "info")
+        showToast(t('saveProfileLinkedProviderToast', { name: provName }), "success")
       }
     } else {
-      showMessage("API 配置已保存", 3000, "info")
-      showToast("API 配置已保存", "success")
+      showMessage(t('saveProfileSuccess'), 3000, "info")
+      showToast(t('saveProfileSuccess'), "success")
     }
 
     profilePanelRef.value?.resetDirty?.()
@@ -859,14 +861,15 @@ const saveProfile = async (profileData: ApiProfile, skipReselect = false): Promi
     })
     return true
   } catch (err: any) {
-    showMessage(`保存配置失败: ${err?.message || err}`, 5000, "error")
-    showToast(`保存配置失败: ${err?.message || err}`, "error")
+    const errorMsg = t('saveProfileFailed', { error: err?.message || err })
+    showMessage(errorMsg, 5000, "error")
+    showToast(errorMsg, "error")
     return false
   }
 }
 
 const deleteProfile = (id: string) => {
-  showCustomConfirm("删除配置", "确定要删除此 API 配置吗？绑定此配置的插件将被取消接管。", async () => {
+  showCustomConfirm(t('deleteProfileConfirmTitle'), t('deleteProfileConfirmText'), async () => {
     try {
       profilePanelRef.value?.resetDirty?.()
       await apiSwitchCore.deleteProfile(id)
@@ -898,11 +901,11 @@ const cancelEdit = () => {
 // 快捷操作
 const applyProfileToAll = (prof: ApiProfile) => {
   handleSafeNavigate(() => {
-    showCustomConfirm("一键配置", `确定要将 API 配置「${prof.name}」应用到所有接管项目吗？这将会覆盖当前所有子插件和思源内置 AI 的绑定配置。`, async () => {
+    showCustomConfirm(t('applyToAllConfirmTitle'), t('applyToAllConfirmText', { name: prof.name }), async () => {
       try {
         await apiSwitchCore.applyProfileToAllPlugins(prof.id)
         refreshData()
-        showMessage("已将配置应用至所有项目", 3000, "info")
+        showMessage(t('appliedToAllSuccess'), 3000, "info")
       } catch (err) {
         logDebug("Exception in applyProfileToAll", err)
       }
@@ -912,10 +915,10 @@ const applyProfileToAll = (prof: ApiProfile) => {
 
 const quickUnbindPlugin = (plug: RegisteredPluginInfo) => {
   handleSafeNavigate(() => {
-    showCustomConfirm("解除接管", `确定要解除对插件「${plug.displayName}」的接管吗？它将恢复为独立配置。`, async () => {
+    showCustomConfirm(t('unbindConfirmTitle'), t('unbindConfirmText', { name: plug.displayName }), async () => {
       await apiSwitchCore.bindPlugin(plug.pluginId, "")
       refreshData()
-      showMessage(`已解除对 ${plug.displayName} 的接管`, 3000, "info")
+      showMessage(t('unboundSuccess', { name: plug.displayName }), 3000, "info")
     })
   })
 }
@@ -924,18 +927,18 @@ const onBindingChange = async (profileId: string, slotId?: string) => {
   if (!activePlugin.value) return
   await apiSwitchCore.bindPlugin(activePlugin.value.pluginId, profileId, slotId)
   refreshData()
-  showMessage("接管配置已更新", 3000, "info")
+  showMessage(t('bindingUpdatedSuccess'), 3000, "info")
 }
 
 const importLocalConfig = async (pluginId: string, slotId?: string) => {
   const res = await apiSwitchCore.importLocalConfigToProfile(pluginId, slotId)
   refreshData()
   if (res?.action === "reused") {
-    showMessage(`检测到与已有配置「${res.profile.name}」一致，已自动绑定，避免生成重复配置`, 4000, "info")
+    showMessage(t('importLocalReused', { name: res.profile.name }), 4000, "info")
   } else if (res?.action === "created") {
-    showMessage(`已基于本地配置新建「${res.profile.name}」并完成接管`, 3000, "info")
+    showMessage(t('importLocalCreated', { name: res.profile.name }), 3000, "info")
   } else {
-    showMessage("已完成接管更新", 3000, "info")
+    showMessage(t('bindingUpdatedSuccess'), 3000, "info")
   }
 }
 
@@ -959,25 +962,25 @@ const handleFileImport = async (e: Event) => {
 
       if (res.providersAdded === 0 && res.profilesAdded === 0) {
         const skipDetails = []
-        if (res.providersSkipped > 0) skipDetails.push(`${res.providersSkipped} 个提供商`)
-        if (res.profilesSkipped > 0) skipDetails.push(`${res.profilesSkipped} 个配置`)
-        const skipText = skipDetails.length > 0 ? `（检测到 ${skipDetails.join("、")}已存在并已去重跳过）` : ""
-        showMessage(`未导入新配置：所有配置均已存在${skipText}`, 4000, "info")
+        if (res.providersSkipped > 0) skipDetails.push(t('itemCountProviders', { count: res.providersSkipped }))
+        if (res.profilesSkipped > 0) skipDetails.push(t('itemCountProfiles', { count: res.profilesSkipped }))
+        const skipText = skipDetails.length > 0 ? t('importSkipExisting', { details: skipDetails.join("、") }) : ""
+        showMessage(t('importNoNewConfig', { details: skipText }), 4000, "info")
       } else {
         const parts = []
-        if (res.providersAdded > 0) parts.push(`提供商 +${res.providersAdded}`)
-        if (res.profilesAdded > 0) parts.push(`配置 +${res.profilesAdded}`)
-        if (res.modelsMerged > 0) parts.push(`模型池补全 +${res.modelsMerged}`)
+        if (res.providersAdded > 0) parts.push(t('itemAddProviders', { count: res.providersAdded }))
+        if (res.profilesAdded > 0) parts.push(t('itemAddProfiles', { count: res.profilesAdded }))
+        if (res.modelsMerged > 0) parts.push(t('itemAddModels', { count: res.modelsMerged }))
 
         const skippedParts = []
-        if (res.providersSkipped > 0) skippedParts.push(`提供商 ${res.providersSkipped} 个`)
-        if (res.profilesSkipped > 0) skippedParts.push(`配置 ${res.profilesSkipped} 个`)
-        const skippedText = skippedParts.length > 0 ? `，去重跳过 ${skippedParts.join("、")}` : ""
+        if (res.providersSkipped > 0) skippedParts.push(t('itemSkipProviders', { count: res.providersSkipped }))
+        if (res.profilesSkipped > 0) skippedParts.push(t('itemSkipProfiles', { count: res.profilesSkipped }))
+        const skippedText = skippedParts.length > 0 ? t('importSkipSuffix', { details: skippedParts.join("、") }) : ""
 
-        showMessage(`导入完成！新增 ${parts.join("，")}${skippedText}`, 5000, "info")
+        showMessage(t('importSuccess', { added: parts.join("，"), skipped: skippedText }), 5000, "info")
       }
     } catch (err: any) {
-      showMessage(`导入失败: ${err?.message || err}`, 5000, "error")
+      showMessage(t('importFailed', { error: err?.message || err }), 5000, "error")
     } finally {
       input.value = ""
     }
@@ -996,9 +999,9 @@ const exportBackupAction = () => {
       a.download = `api-switch-backup-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      showMessage("已成功全量导出提供商与 API 配置", 3000, "info")
+      showMessage(t('exportBackupSuccess'), 3000, "info")
     } catch (err: any) {
-      showMessage(`导出失败: ${err?.message || err}`, 5000, "error")
+      showMessage(t('exportFailed', { error: err?.message || err }), 5000, "error")
     }
   })
 }
@@ -1010,15 +1013,15 @@ const syncFromSiyuanAction = async () => {
       refreshData()
       let detailMsg = ""
       if (res.reusedProfilesCount > 0 && res.createdProfilesCount > 0) {
-        detailMsg = `（复用 ${res.reusedProfilesCount} 个已有配置，新增 ${res.createdProfilesCount} 个配置）`
+        detailMsg = t('reusedAndAddedProfiles', { reused: res.reusedProfilesCount, added: res.createdProfilesCount })
       } else if (res.reusedProfilesCount > 0) {
-        detailMsg = `（已复用 ${res.reusedProfilesCount} 个一致的已有配置，未产生重复配置）`
+        detailMsg = t('reusedProfilesOnly', { reused: res.reusedProfilesCount })
       } else if (res.createdProfilesCount > 0) {
-        detailMsg = `（新增 ${res.createdProfilesCount} 个配置）`
+        detailMsg = t('addedProfilesOnly', { added: res.createdProfilesCount })
       }
-      showMessage(`已成功从思源同步！检测到 ${res.providersCount} 个提供商，已联动 ${res.profilesCount} 个场景配置${detailMsg}。`, 4000, "info")
+      showMessage(t('syncFromSiyuanSuccess', { providers: res.providersCount, profiles: res.profilesCount, details: detailMsg }), 4000, "info")
     } catch (err: any) {
-      showMessage(`读取同步失败: ${err?.message || err}`, 5000, "error")
+      showMessage(t('readSyncFailed', { error: err?.message || err }), 5000, "error")
     }
   })
 }
@@ -1041,8 +1044,8 @@ const siyuanBuiltInAiInfo = computed(() => {
     if (!ai) return ""
     const extracted = extractSiyuanAiSettings(ai)
     const count = extracted.providers.length
-    const editingModel = extracted.editing?.model || "无"
-    return `${count} 个提供商，编辑器模型: ${editingModel}`
+    const editingModel = extracted.editing?.model || t('none')
+    return t('siyuanAiInfoDesc', { count, model: editingModel })
   } catch (e) {
     return ""
   }
@@ -1056,10 +1059,10 @@ const getProviderName = (provider: string) => {
   const preset = PRESET_PROVIDERS[provider]
   if (preset) return preset.displayName
   const dict: Record<string, string> = {
-    custom: "自定义",
-    systemone: "Jev 决策模型",
+    custom: t('custom'),
+    systemone: t('protoSystemOne'),
   }
-  return dict[provider] || provider || "未知"
+  return dict[provider] || provider || t('unknown')
 }
 
 const getProfileDisplaySub = (prof: ApiProfile) => {
@@ -1071,10 +1074,10 @@ const getProfileDisplaySub = (prof: ApiProfile) => {
   if (!provName) {
     provName = getProviderName(prof.provider)
   }
-  if (prof.isDecisionModel && (!provName || provName === "未知" || provName === "自定义")) {
-    provName = "决策模型"
+  if (prof.isDecisionModel && (!provName || provName === t('unknown') || provName === t('custom'))) {
+    provName = t('decisionModelBadge')
   }
-  return `${provName || "未知"} | ${prof.model || "未设模型"}`
+  return `${provName || t('unknown')} | ${prof.model || t('unspecifiedModel')}`
 }
 
 // 接管列表条目副标题：直接展示当前实际生效的模型名（接管→Profile 模型；独立→本地模型），无需点击
@@ -1083,9 +1086,9 @@ const getEffectiveModel = (
 ): string => {
   if (item.isBound && item.boundProfileId) {
     const prof = profiles.value.find((p) => p.id === item.boundProfileId)
-    return prof?.model || "未设模型"
+    return prof?.model || t('unspecifiedModel')
   }
-  return item.localConfig?.model || "未设模型"
+  return item.localConfig?.model || t('unspecifiedModel')
 }
 
 const getPluginSubLine = (plug: RegisteredPluginInfo): string => {
@@ -1103,16 +1106,16 @@ const getPluginSubTooltip = (plug: RegisteredPluginInfo): string => {
     for (const s of plug.slots) {
       if (s.isBound && s.boundProfileId) {
         const prof = profiles.value.find((p) => p.id === s.boundProfileId)
-        lines.push(`${s.name}: 「${prof?.name || "未知配置"}」 · ${getEffectiveModel(s)}`)
+        lines.push(`${s.name}: 「${prof?.name || t('unknownProfile')}」 · ${getEffectiveModel(s)}`)
       } else {
-        lines.push(`${s.name}: 独立配置 · ${getEffectiveModel(s)}`)
+        lines.push(`${s.name}: ${t('standaloneConfig')} · ${getEffectiveModel(s)}`)
       }
     }
   } else if (plug.isBound && plug.boundProfileId) {
     const prof = profiles.value.find((p) => p.id === plug.boundProfileId)
-    lines.push(`「${prof?.name || "未知配置"}」 · ${getEffectiveModel(plug)}`)
+    lines.push(`「${prof?.name || t('unknownProfile')}」 · ${getEffectiveModel(plug)}`)
   } else {
-    lines.push(`独立配置 · ${getEffectiveModel(plug)}`)
+    lines.push(`${t('standaloneConfig')} · ${getEffectiveModel(plug)}`)
   }
   return lines.join("\n")
 }

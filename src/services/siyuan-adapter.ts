@@ -3,6 +3,8 @@ import { ApiProvider, ApiProviderModel, SiyuanAiJson } from "@/types";
 import { ApiProfile } from "./profile-store";
 import { normalizeAiProtocol } from "@/utils/protocol";
 import { findPresetByBaseUrl, PRESET_PROVIDERS, SYSTEMONE_DECISION_ENDPOINT, SYSTEMONE_DECISION_DEFAULT_MODEL } from "@/constants/providers";
+import { SIYUAN_BUILTIN_EDITING, SIYUAN_BUILTIN_AGENT, SIYUAN_BUILTIN_DECISION } from "@/constants/siyuan-scopes";
+import { genProviderId } from "@/utils/id";
 
 export interface SiyuanExtractedAiInfo {
   providerId?: string;
@@ -122,27 +124,29 @@ export function extractSiyuanAiSettings(aiConfig: any): {
   const rawProviders = Array.isArray(realAi.providers) ? realAi.providers : [];
 
   // 1. 解析思源 providers 列表
-  const providers: ApiProvider[] = rawProviders.map((p: any, idx: number) => {
-    const pModels: ApiProviderModel[] = Array.isArray(p.models)
-      ? p.models.map((m: any) => ({
-          id: m.id || m.name || `model_${idx}`,
-          name: m.name || m.id || "",
-          displayName: m.displayName || m.name || m.id || "",
-          enabled: m.enabled ?? true,
-          contextLength: m.contextLength,
-        }))
-      : [];
+  const providers: ApiProvider[] = rawProviders
+    .filter((p: any) => p && typeof p === "object")
+    .map((p: any, idx: number) => {
+      const pModels: ApiProviderModel[] = Array.isArray(p.models)
+        ? p.models.map((m: any) => ({
+            id: m.id || m.name || `model_${idx}`,
+            name: m.name || m.id || "",
+            displayName: m.displayName || m.name || m.id || "",
+            enabled: m.enabled ?? true,
+            contextLength: m.contextLength,
+          }))
+        : [];
 
-    const rawDisplayName = p.displayName || p.id || `提供商 ${idx + 1}`;
-    const cleanedDisplayName = cleanRawProviderDisplayName(
-      rawDisplayName,
-      undefined,
-      pModels.map((m) => m.name || m.id)
-    );
+      const rawDisplayName = p.displayName || p.id || `提供商 ${idx + 1}`;
+      const cleanedDisplayName = cleanRawProviderDisplayName(
+        rawDisplayName,
+        undefined,
+        pModels.map((m) => m.name || m.id)
+      );
 
-    return {
-      id: p.id || `provider_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-      displayName: cleanedDisplayName,
+      return {
+        id: p.id || genProviderId(),
+        displayName: cleanedDisplayName,
       enabled: p.enabled ?? true,
       apiKey: extractApiKey(p),
       baseUrl: extractBaseUrl(p),
@@ -631,8 +635,8 @@ export class SiyuanAdapter {
       },
     };
 
-    if (bindings["siyuan_builtin_editing"]) {
-      const prof = profiles.find((p) => p.id === bindings["siyuan_builtin_editing"]);
+    if (bindings[SIYUAN_BUILTIN_EDITING]) {
+      const prof = profiles.find((p) => p.id === bindings[SIYUAN_BUILTIN_EDITING]);
       if (prof) {
         const effective = resolveEffectiveProfile(prof);
         exportData.editing = {
@@ -644,8 +648,8 @@ export class SiyuanAdapter {
       }
     }
 
-    if (bindings["siyuan_builtin_agent"]) {
-      const prof = profiles.find((p) => p.id === bindings["siyuan_builtin_agent"]);
+    if (bindings[SIYUAN_BUILTIN_AGENT]) {
+      const prof = profiles.find((p) => p.id === bindings[SIYUAN_BUILTIN_AGENT]);
       if (prof) {
         const effective = resolveEffectiveProfile(prof);
         exportData.agent = {
@@ -661,8 +665,8 @@ export class SiyuanAdapter {
       }
     }
 
-    if (bindings["siyuan_builtin_decision"]) {
-      const prof = profiles.find((p) => p.id === bindings["siyuan_builtin_decision"]);
+    if (bindings[SIYUAN_BUILTIN_DECISION]) {
+      const prof = profiles.find((p) => p.id === bindings[SIYUAN_BUILTIN_DECISION]);
       if (prof) {
         const effective = resolveEffectiveProfile(prof);
         exportData.decision = {
